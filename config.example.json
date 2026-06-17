@@ -1,0 +1,12 @@
+{
+    "tmdb": {
+        "apiKey": "请填入你的TMDB API KEY",
+        "mirrors": [
+            "https://api.themoviedb.org/3",
+            "https://api.tmdb.org/3"
+        ],
+        "timeout": 8000
+    },
+    "proxy": "127.0.0.1:10808",
+    "adminPassword": "请修改默认管理员密码"
+}

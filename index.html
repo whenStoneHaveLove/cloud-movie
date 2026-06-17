@@ -1,0 +1,366 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>云盘影院 - 移动云盘电影在线看</title>
+    <link rel="icon" type="image/svg+xml" href="favicon.svg">
+    <link rel="apple-touch-icon" href="favicon.svg">
+    <link rel="stylesheet" href="css/style.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
+</head>
+<body>
+
+    <!-- Sidebar Overlay (mobile) -->
+    <div class="sidebar-overlay" onclick="document.getElementById('sidebar').classList.remove('open')"></div>
+
+    <!-- Sidebar Navigation -->
+    <aside class="sidebar" id="sidebar">
+        <div class="sidebar-header">
+            <a href="#" class="logo" onclick="App.navigate('home')">
+                <i class="fas fa-film"></i>
+                <span>云盘影院</span>
+            </a>
+        </div>
+
+        <div class="sidebar-search">
+            <i class="fas fa-search"></i>
+            <input type="text" id="searchInput" placeholder="搜索电影、电视剧..." oninput="App.handleSearch(this.value)">
+        </div>
+
+        <nav class="sidebar-nav">
+            <div class="nav-group">
+                <div class="nav-group-label">媒体库</div>
+                <a href="#" class="nav-item active" data-page="home" onclick="App.navigate('home')">
+                    <i class="fas fa-home"></i> <span>首页</span>
+                </a>
+                <a href="#" class="nav-item" data-page="history" onclick="App.navigate('history')">
+                    <i class="fas fa-clock-rotate-left"></i> <span>最近观看</span>
+                </a>
+                <a href="#" class="nav-item" data-page="favorites" onclick="App.navigate('favorites')">
+                    <i class="fas fa-heart"></i> <span>我的收藏</span>
+                </a>
+            </div>
+
+            <div class="nav-group">
+                <div class="nav-group-label">分类</div>
+                <a href="#" class="nav-item" data-page="home" onclick="App.filterGenre('电影')">
+                    <i class="fas fa-film"></i> <span>电影</span>
+                </a>
+                <a href="#" class="nav-item" data-page="home" onclick="App.filterGenre('电视剧')">
+                    <i class="fas fa-tv"></i> <span>电视剧</span>
+                </a>
+                <a href="#" class="nav-item" data-page="home" onclick="App.filterGenre('动漫')">
+                    <i class="fas fa-hat-wizard"></i> <span>动漫</span>
+                </a>
+                <a href="#" class="nav-item" data-page="home" onclick="App.filterGenre('综艺')">
+                    <i class="fas fa-masks-theater"></i> <span>综艺</span>
+                </a>
+                <a href="#" class="nav-item" data-page="home" onclick="App.filterGenre('纪录片')">
+                    <i class="fas fa-video"></i> <span>纪录片</span>
+                </a>
+                <a href="#" class="nav-item" data-page="home" onclick="App.filterGenre('演唱会')">
+                    <i class="fas fa-music"></i> <span>演唱会</span>
+                </a>
+                <a href="#" class="nav-item" data-page="home" onclick="App.filterGenre('其他')">
+                    <i class="fas fa-ellipsis"></i> <span>其他</span>
+                </a>
+            </div>
+
+            <div class="nav-group nav-group-bottom">
+                <a href="#" class="nav-item" data-page="admin" onclick="Admin.navigateToPanel()" style="display:none">
+                    <i class="fas fa-shield-halved"></i> <span>管理</span>
+                </a>
+                <a href="#" class="nav-item" data-page="import" onclick="App.navigate('import')">
+                    <i class="fas fa-file-import"></i> <span>导入</span>
+                </a>
+            </div>
+        </nav>
+
+        <div class="sidebar-footer">
+            <button class="theme-toggle" onclick="App.toggleTheme()" title="切换主题">
+                <i class="fas fa-moon" id="themeIcon"></i>
+            </button>
+        </div>
+    </aside>
+
+    <!-- Mobile Top Bar -->
+    <header class="mobile-header">
+        <button class="mobile-menu-btn" onclick="document.getElementById('sidebar').classList.toggle('open')">
+            <i class="fas fa-bars"></i>
+        </button>
+        <a href="#" class="logo" onclick="App.navigate('home')">
+            <i class="fas fa-film"></i>
+            <span>云盘影院</span>
+        </a>
+        <button class="theme-toggle" onclick="App.toggleTheme()">
+            <i class="fas fa-moon" id="themeIconMobile"></i>
+        </button>
+    </header>
+
+    <!-- Main Content Area -->
+    <main class="main-content">
+
+        <!-- Home Page -->
+        <section id="page-home" class="page active">
+            <div id="homeContent" class="home-rows"></div>
+
+            <div class="filter-bar" id="filterBar">
+                <button class="filter-btn active" data-genre="all" onclick="App.filterGenre('all')">全部</button>
+                <div id="genreButtons"></div>
+            </div>
+            <div id="movieGrid" class="movie-grid" style="display:none"></div>
+            <div id="emptyState" class="empty-state" style="display:none">
+                <i class="fas fa-film"></i>
+                <p>暂无影片，请先导入</p>
+            </div>
+        </section>
+
+        <!-- Favorites -->
+        <section id="page-favorites" class="page">
+            <h2 class="page-title"><i class="fas fa-heart"></i> 我的收藏</h2>
+            <div id="favGrid" class="movie-grid"></div>
+            <div id="favEmpty" class="empty-state" style="display:none">
+                <i class="fas fa-heart-crack"></i>
+                <p>还没有收藏的电影</p>
+            </div>
+        </section>
+
+        <!-- History -->
+        <section id="page-history" class="page">
+            <div class="page-title-row">
+                <h2 class="page-title"><i class="fas fa-clock-rotate-left"></i> 观看历史</h2>
+                <button class="btn-clear" onclick="App.clearHistory()">
+                    <i class="fas fa-trash"></i> 清空
+                </button>
+            </div>
+            <div id="historyList" class="history-list"></div>
+            <div id="historyEmpty" class="empty-state" style="display:none">
+                <i class="fas fa-clock"></i>
+                <p>还没有观看记录</p>
+            </div>
+        </section>
+
+        <!-- Import -->
+        <section id="page-import" class="page">
+            <div class="import-page-header">
+                <h2 class="page-title"><i class="fas fa-file-import"></i> 导入资源</h2>
+                <div class="import-header-actions">
+                    <button class="btn-scrape-manage" onclick="App.rescrapeAllFailed()" title="重新刮削所有未匹配的影片">
+                        <i class="fas fa-rotate"></i> 重新刮削
+                    </button>
+                    <button class="btn-clear-data" onclick="App.clearAllData()" title="清空所有已导入的数据">
+                        <i class="fas fa-trash-can"></i> 清空数据
+                    </button>
+                </div>
+            </div>
+
+            <p class="import-desc">粘贴移动云盘（yun.139.com）分享链接，浏览目录并选择要导入的影片。</p>
+
+            <div class="import-form">
+                <div class="import-form-row">
+                    <div class="import-field import-field-main">
+                        <div class="import-input-wrapper">
+                            <i class="fas fa-link input-icon"></i>
+                            <input type="text" id="shareLink" placeholder="粘贴分享链接，如 https://yun.139.com/w/#/i/xxxxxx">
+                        </div>
+                    </div>
+                    <div class="import-field import-field-pwd">
+                        <div class="import-input-wrapper">
+                            <i class="fas fa-key input-icon"></i>
+                            <input type="text" id="sharePwd" placeholder="提取码" maxlength="10">
+                        </div>
+                    </div>
+                    <button class="btn-import" id="btnParseShare" onclick="App.handleImport()">
+                        <i class="fas fa-magnifying-glass"></i>
+                        <span>解析</span>
+                    </button>
+                </div>
+            </div>
+
+            <div id="importStatus" class="import-status" style="display:none"></div>
+
+            <div id="importLoading" class="import-loading" style="display:none">
+                <div class="loading-spinner"></div>
+                <span>正在连接分享链接...</span>
+            </div>
+
+            <!-- File Tree Section -->
+            <div id="importTreeSection" class="import-tree-section" style="display:none">
+                <div id="importToolbar" class="import-toolbar-container"></div>
+                <div id="importFileTree" class="import-file-tree"></div>
+            </div>
+
+            <!-- Scrape Management Panel -->
+            <div id="scrapePanel" class="scrape-panel">
+                <div class="scrape-panel-header" onclick="this.parentElement.classList.toggle('expanded')">
+                    <h3>
+                        <i class="fas fa-wand-magic-sparkles"></i>
+                        刮削管理
+                        <span id="scrapePanelCount" class="scrape-panel-count"></span>
+                    </h3>
+                    <i class="fas fa-chevron-down scrape-panel-toggle"></i>
+                </div>
+                <div class="scrape-panel-body" id="scrapePanelBody">
+                    <div class="scrape-panel-empty">
+                        <i class="fas fa-check-circle"></i>
+                        <span>所有影片都已成功刮削</span>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Detail Page -->
+        <section id="page-detail" class="page">
+            <div class="detail-header">
+                <button class="detail-back" onclick="App.closeDetail()">
+                    <i class="fas fa-arrow-left"></i> 返回
+                </button>
+            </div>
+            <div id="detailContent" class="detail-content"></div>
+        </section>
+
+        <!-- Search Page -->
+        <section id="page-search" class="page">
+            <div class="search-hero">
+                <div class="search-hero-inner">
+                    <div class="search-input-wrap">
+                        <i class="fas fa-search search-input-icon"></i>
+                        <input type="text" id="globalSearchInput"
+                               placeholder="输入影片名称、演员、导演..."
+                               oninput="App.onSearchInput(this.value)"
+                               onkeydown="if(event.key==='Enter')App.doGlobalSearch()">
+                        <button class="search-clear-btn" id="searchClearBtn" onclick="App.clearSearch()" style="display:none">
+                            <i class="fas fa-xmark"></i>
+                        </button>
+                    </div>
+                    <button class="search-filter-toggle-btn" id="searchFilterToggleBtn" onclick="App.toggleSearchFilters()">
+                        <i class="fas fa-sliders"></i>
+                        <span>高级筛选</span>
+                        <i class="fas fa-chevron-down search-filter-arrow"></i>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Advanced Filters Panel -->
+            <div class="search-filters-panel" id="searchFiltersPanel">
+                <div class="filter-section">
+                    <div class="filter-section-label"><i class="fas fa-star"></i> 评分</div>
+                    <div class="rating-range-group">
+                        <button class="rf-btn active" data-min="0" onclick="App.setFilter('minRating', 0)">不限</button>
+                        <button class="rf-btn" data-min="7" onclick="App.setFilter('minRating', 7)">7+</button>
+                        <button class="rf-btn" data-min="8" onclick="App.setFilter('minRating', 8)">8+</button>
+                        <button class="rf-btn" data-min="9" onclick="App.setFilter('minRating', 9)">9+</button>
+                    </div>
+                </div>
+                <div class="filter-section">
+                    <div class="filter-section-label"><i class="fas fa-calendar"></i> 年代</div>
+                    <div class="year-range-group">
+                        <select class="year-select" id="yearFrom" onchange="App.setFilter('yearFrom', this.value)">
+                            <option value="">不限</option>
+                        </select>
+                        <span class="year-sep">—</span>
+                        <select class="year-select" id="yearTo" onchange="App.setFilter('yearTo', this.value)">
+                            <option value="">不限</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="filter-section">
+                    <div class="filter-section-label"><i class="fas fa-layer-group"></i> 类型</div>
+                    <div class="media-type-chips" id="searchMediaTypeChips">
+                        <button class="mt-chip active" data-type="all" onclick="App.setFilter('mediaType','all')">
+                            <i class="fas fa-globe"></i> 全部
+                        </button>
+                        <button class="mt-chip" data-type="movie" onclick="App.setFilter('mediaType','movie')">
+                            <i class="fas fa-film"></i> 电影
+                        </button>
+                        <button class="mt-chip" data-type="tv" onclick="App.setFilter('mediaType','tv')">
+                            <i class="fas fa-tv"></i> 电视剧
+                        </button>
+                        <button class="mt-chip" data-type="anime" onclick="App.setFilter('mediaType','anime')">
+                            <i class="fas fa-hat-wizard"></i> 动漫
+                        </button>
+                        <button class="mt-chip" data-type="variety" onclick="App.setFilter('mediaType','variety')">
+                            <i class="fas fa-masks-theater"></i> 综艺
+                        </button>
+                        <button class="mt-chip" data-type="concert" onclick="App.setFilter('mediaType','concert')">
+                            <i class="fas fa-music"></i> 演唱会
+                        </button>
+                    </div>
+                </div>
+                <div class="filter-section">
+                    <div class="filter-section-label"><i class="fas fa-tags"></i> 标签</div>
+                    <div class="genre-chips-wrap" id="searchGenreChips"></div>
+                </div>
+                <div class="filter-section filter-section-sort">
+                    <div class="filter-section-label"><i class="fas fa-arrow-up-a-z"></i> 排序</div>
+                    <div class="sort-options" id="searchSortOptions">
+                        <button class="sort-opt active" data-sort="relevance" onclick="App.setFilter('sortBy','relevance')">相关度</button>
+                        <button class="sort-opt" data-sort="rating" onclick="App.setFilter('sortBy','rating')">评分</button>
+                        <button class="sort-opt" data-sort="year-desc" onclick="App.setFilter('sortBy','year-desc')">年代新→旧</button>
+                        <button class="sort-opt" data-sort="year-asc" onclick="App.setFilter('sortBy','year-asc')">年代旧→新</button>
+                        <button class="sort-opt" data-sort="title" onclick="App.setFilter('sortBy','title')">标题 A-Z</button>
+                    </div>
+                </div>
+                <div class="filter-actions-row">
+                    <button class="btn-reset-filters" onclick="App.resetSearchFilters()">
+                        <i class="fas fa-rotate-left"></i> 重置筛选
+                    </button>
+                    <span class="active-filter-count" id="activeFilterCount"></span>
+                </div>
+            </div>
+
+            <!-- Search Results -->
+            <div class="search-results-area">
+                <div class="search-results-bar" id="searchResultsBar" style="display:none">
+                    <span class="results-info" id="resultsInfo">找到 0 部影片</span>
+                </div>
+                <div id="searchResultsGrid" class="movie-grid"></div>
+                <div id="searchEmptyState" class="empty-state" style="display:none">
+                    <i class="fas fa-magnifying-glass"></i>
+                    <p>未找到匹配的影片</p>
+                    <p class="empty-state-hint">试试调整搜索词或筛选条件</p>
+                </div>
+                <div id="searchInitState" class="empty-state">
+                    <i class="fas fa-search"></i>
+                    <p>输入关键词开始搜索</p>
+                    <p class="empty-state-hint">支持中文片名、演员、导演等</p>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <!-- Player Modal -->
+    <div id="playerModal" class="modal" onclick="App.closePlayerOutside(event)">
+        <div class="modal-content">
+            <button class="modal-close" onclick="App.closePlayer()">
+                <i class="fas fa-xmark"></i>
+            </button>
+            <div class="player-wrapper" id="playerWrapper">
+                <video id="videoPlayer" playsinline preload="metadata"></video>
+            </div>
+            <div class="movie-info">
+                <div class="movie-info-header">
+                    <h2 id="playerTitle"></h2>
+                    <button class="btn-fav" id="btnFav" onclick="App.toggleFavFromPlayer()">
+                        <i class="fas fa-heart"></i>
+                    </button>
+                </div>
+                <div class="movie-meta" id="playerMeta"></div>
+                <p class="movie-desc" id="playerDesc"></p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Scripts (order matters: dependencies first) -->
+    <script src="js/db.js"></script>
+    <script src="js/scraper.js"></script>
+    <script src="js/store.js"></script>
+    <script src="js/player.js"></script>
+    <script src="js/render.js"></script>
+    <script src="js/share-parser.js"></script>
+    <script src="js/admin.js"></script>
+    <script src="js/app.js"></script>
+</body>
+</html>

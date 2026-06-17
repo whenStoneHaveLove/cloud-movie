@@ -1,0 +1,9 @@
+node_modules/
+config.json
+data/*
+!data/.gitkeep
+data/backups/
+server.log
+.codebuddy/
+.DS_Store
+Thumbs.db

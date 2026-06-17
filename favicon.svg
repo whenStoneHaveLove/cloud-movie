@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#1a1a2e"/>
+      <stop offset="100%" stop-color="#16213e"/>
+    </linearGradient>
+    <linearGradient id="accent" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#e94560"/>
+      <stop offset="100%" stop-color="#ff6b6b"/>
+    </linearGradient>
+  </defs>
+  <!-- Background -->
+  <rect width="100" height="100" rx="20" fill="url(#bg)"/>
+  <!-- Film reel -->
+  <circle cx="50" cy="50" r="32" fill="none" stroke="url(#accent)" stroke-width="5"/>
+  <circle cx="50" cy="50" r="10" fill="url(#accent)"/>
+  <!-- Reel spokes -->
+  <line x1="50" y1="18" x2="50" y2="28" stroke="url(#accent)" stroke-width="3" stroke-linecap="round"/>
+  <line x1="50" y1="72" x2="50" y2="82" stroke="url(#accent)" stroke-width="3" stroke-linecap="round"/>
+  <line x1="18" y1="50" x2="28" y2="50" stroke="url(#accent)" stroke-width="3" stroke-linecap="round"/>
+  <line x1="72" y1="50" x2="82" y2="50" stroke="url(#accent)" stroke-width="3" stroke-linecap="round"/>
+  <!-- Play triangle -->
+  <polygon points="45,38 45,62 62,50" fill="#fff" opacity="0.95"/>
+</svg>
