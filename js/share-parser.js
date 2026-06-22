@@ -459,6 +459,51 @@ const ShareParser = (() => {
         return await parseShareLink(shareUrl, password);
     }
 
+    /**
+     * 刷新网盘视频下载链接（签名 URL 24小时过期）
+     * @param {string} linkID - 分享链接 ID
+     * @param {string} passwd - 提取码
+     * @param {string} fileId - 文件 coID
+     * @param {string} folderPath - 文件所在文件夹路径
+     * @returns {string|null} 新的下载链接
+     */
+    async function refreshDownloadUrl(linkID, passwd, fileId, folderPath) {
+        if (!linkID || !fileId) return null;
+        try {
+            const body = JSON.stringify({
+                linkID,
+                passwd: passwd || '',
+                bNum: 0,
+                eNum: 999,  // 大页码，确保覆盖所有文件
+                path: folderPath || '',
+                v: '2.0',
+            });
+            const resp = await fetch('/api/proxy', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body,
+            });
+            const data = await resp.json();
+            if (!data || data.code !== '0') return null;
+
+            // 遍历找到目标文件
+            let items = [];
+            if (data.data?.fileInfos) items = data.data.fileInfos;
+            else if (data.data?.list) items = data.data.list;
+            else if (Array.isArray(data.data)) items = data.data;
+
+            for (const item of items) {
+                if (item.coID === fileId || item.fileId === fileId) {
+                    return item.downloadUrl || item.presentURL || item.cdnDownLoadUrl || null;
+                }
+            }
+            return null;
+        } catch (e) {
+            console.warn('[Refresh] 刷新链接失败:', e.message);
+            return null;
+        }
+    }
+
     return {
         parseShareUrl,
         parseShareLink,
@@ -468,6 +513,7 @@ const ShareParser = (() => {
         importFromShare,
         formatFileSize,
         isVideoFile,
+        refreshDownloadUrl,
         VIDEO_EXTS,
     };
 })();

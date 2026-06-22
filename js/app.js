@@ -1032,6 +1032,33 @@ const App = (() => {
 
         const enriched = enrichMovie(movie);
 
+        // 云端视频刷新过期链接
+        if (enriched.videoUrl && enriched.videoUrl.includes('mcloud.139.com') && enriched._linkID) {
+            refreshAndPlay(enriched);
+            return;
+        } else {
+            doPlay(enriched);
+        }
+    }
+
+    async function refreshAndPlay(enriched) {
+        const freshUrl = await ShareParser.refreshDownloadUrl(
+            enriched._linkID, enriched._passwd, enriched._fileId, enriched.folderPath
+        );
+        if (freshUrl) {
+            enriched.videoUrl = freshUrl;
+            // 回写到 movies 数组和存储
+            const movie = movies.find(m => m.id === enriched.id);
+            if (movie) {
+                movie.videoUrl = freshUrl;
+                saveImportedMovies(movies);
+            }
+        }
+        doPlay(enriched);
+    }
+
+    function doPlay(enriched) {
+
         document.getElementById('playerTitle').textContent = enriched.title;
 
         const metaParts = [];
@@ -1051,7 +1078,7 @@ const App = (() => {
         }
         document.getElementById('playerDesc').innerHTML = descHtml;
 
-        document.getElementById('btnFav').classList.toggle('active', Store.isFavorite(movie.id));
+        document.getElementById('btnFav').classList.toggle('active', Store.isFavorite(enriched.id));
 
         const modalContent = document.querySelector('.modal-content');
         if (enriched.backdrop) {
@@ -1063,10 +1090,10 @@ const App = (() => {
 
         // Inject next episode info for series
         const series = getSeriesList().find(s =>
-            s.isSeries && s.episodes && s.episodes.some(ep => ep.id === movie.id)
+            s.isSeries && s.episodes && s.episodes.some(ep => ep.id === enriched.id)
         );
         if (series) {
-            const currentIdx = series.episodes.findIndex(ep => ep.id === movie.id);
+            const currentIdx = series.episodes.findIndex(ep => ep.id === enriched.id);
             if (currentIdx >= 0 && currentIdx < series.episodes.length - 1) {
                 enriched._nextEpisodeId = series.episodes[currentIdx + 1].id;
                 enriched._nextEpisodeTitle = series.episodes[currentIdx + 1].name || series.episodes[currentIdx + 1].title || `第${currentIdx + 2}集`;
@@ -1726,6 +1753,9 @@ const App = (() => {
                             folderPath: file.folderPath || '',
                             source: '139share',
                             importedAt: Date.now(),
+                            _linkID: shareData.linkID || null,
+                            _passwd: shareData.passwd || null,
+                            _fileId: file.fileId || null,
                         };
 
                         existing.push(movie);
