@@ -8,6 +8,6 @@
         ],
         "timeout": 8000
     },
-    "proxy": "127.0.0.1:10808",
+    "proxy": "",
     "adminPassword": "请修改默认管理员密码"
 }

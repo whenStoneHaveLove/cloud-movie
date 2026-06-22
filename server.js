@@ -506,7 +506,7 @@ const TMDB_MIRRORS = CONFIG.tmdb?.mirrors || [
 const TMDB_TIMEOUT = CONFIG.tmdb?.timeout || 8000; // 8 second timeout per mirror
 
 // Local proxy for bypassing GFW (v2rayN, Clash, etc.)
-const LOCAL_PROXY = CONFIG.proxy || process.env.HTTP_PROXY || '127.0.0.1:10808';
+const LOCAL_PROXY = CONFIG.proxy || process.env.HTTP_PROXY || '';
 const PROXY_HOST = LOCAL_PROXY.split(':')[0] || '127.0.0.1';
 const PROXY_PORT = parseInt(LOCAL_PROXY.split(':')[1]) || 10808;
 
@@ -867,11 +867,15 @@ function proxyTmdb(req, res) {
         }
     }
 
-    // Start with local proxy tunnel
-    tryViaProxy().catch((e) => {
-        console.error('TMDB tryViaProxy unhandled error:', e.message);
-        if (!responded) tryDirectMirrors();
-    });
+    // Start with local proxy tunnel（仅当配置了代理时）
+    if (LOCAL_PROXY) {
+        tryViaProxy().catch((e) => {
+            console.error('TMDB tryViaProxy unhandled error:', e.message);
+            if (!responded) tryDirectMirrors();
+        });
+    } else {
+        tryDirectMirrors();
+    }
 }
 
 // Serve config status (not the key itself)
@@ -953,7 +957,7 @@ process.on('unhandledRejection', (reason) => {
 server.listen(PORT, () => {
     console.log(`云盘影院服务器已启动: http://localhost:${PORT}`);
     console.log(`TMDB API Key: ${TMDB_API_KEY ? '已配置 ✓' : '未配置 ✗ (请在 config.json 中添加 apiKey)'}`);
-    console.log(`本地代理: ${LOCAL_PROXY} ✓`);
+    console.log(`本地代理: ${LOCAL_PROXY || '未配置（TMDB将直连，国内服务器建议配置代理）'}`);
     console.log(`TMDB 镜像: ${TMDB_MIRRORS.join(', ')}`);
     console.log(`TMDB 超时: ${TMDB_TIMEOUT}ms`);
     console.log('按 Ctrl+C 停止');
