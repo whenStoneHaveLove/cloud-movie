@@ -7,7 +7,15 @@ const path = require('path');
 const zlib = require('zlib');
 const url = require('url'); // 保留用于 http-proxy-agent 依赖，代码本体用 WHATWG URL
 
-const PORT = 8081;
+// Load config (必须在 PORT 之前)
+let CONFIG = {};
+try {
+    CONFIG = JSON.parse(fs.readFileSync(path.join(__dirname, 'config.json'), 'utf8'));
+} catch (e) {
+    console.warn('config.json not found or invalid, using defaults');
+}
+
+const PORT = CONFIG.port || process.env.PORT || 8081;
 const STATIC_DIR = __dirname;
 const DATA_DIR = path.join(__dirname, 'data');
 const VISITORS_FILE = 'visitors.json';
@@ -325,14 +333,6 @@ async function handleMovies(req, res) {
         console.error('Movies API error:', e.message);
         sendJSON(res, 500, { error: e.message });
     }
-}
-
-// Load config
-let CONFIG = {};
-try {
-    CONFIG = JSON.parse(fs.readFileSync(path.join(__dirname, 'config.json'), 'utf8'));
-} catch (e) {
-    console.warn('config.json not found or invalid, using defaults');
 }
 
 const TMDB_API_KEY = CONFIG.tmdb?.apiKey || process.env.TMDB_API_KEY || '';

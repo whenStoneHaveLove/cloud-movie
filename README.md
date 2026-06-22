@@ -67,6 +67,7 @@ nano config.json
 
 | 配置项 | 说明 |
 |--------|------|
+| `port` | 服务端口，默认 `8081` |
 | `tmdb.apiKey` | **必填**，TMDB API 密钥 |
 | `tmdb.mirrors` | TMDB API 镜像地址，国内可修改为代理地址 |
 | `tmdb.timeout` | 请求超时时间（毫秒） |
@@ -81,7 +82,7 @@ node server.js
 
 浏览器打开 `http://localhost:8081` 即可使用。
 
-> 💡 端口默认为 **8081**，如需修改请编辑 `server.js` 中的 `PORT` 常量。
+> 💡 端口默认为 **8081**，可在 `config.json` 中修改 `port` 字段，或设置环境变量 `PORT`。
 
 ### 4. 服务器部署（后台运行）
 
