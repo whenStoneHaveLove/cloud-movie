@@ -803,17 +803,28 @@ function proxyTmdb(req, res) {
 
             await new Promise((resolve) => {
                 const target = new URL(targetUrl);
+                let resolved = false;
+                // 总超时兜底：10s 无响应则放弃当前镜像
+                const totalTimer = setTimeout(() => {
+                    if (!resolved && !responded) {
+                        console.warn('[TMDB] 全局超时: ' + baseUrl);
+                        resolved = true;
+                        resolve();
+                    }
+                }, TMDB_TIMEOUT);
+
                 const proxyReq = https.request({
                     hostname: target.hostname,
                     path: target.pathname + target.search,
                     method: 'GET',
-                    timeout: TMDB_TIMEOUT,   // socket 超时
-                    family: 4,               // 强制 IPv4
+                    timeout: TMDB_TIMEOUT,
+                    family: 4,
                     headers: {
                         'Accept': 'application/json',
                         'User-Agent': 'CloudMovie/1.0',
                     },
                 }, (proxyRes) => {
+                    clearTimeout(totalTimer);
                     if (responded) { proxyRes.resume(); resolve(); return; }
                     responded = true;
 
@@ -849,14 +860,16 @@ function proxyTmdb(req, res) {
                 });
 
                 proxyReq.on('timeout', () => {
+                    clearTimeout(totalTimer);
                     if (!responded) {
-                        console.warn('TMDB direct timeout:', baseUrl, '(连接/读写超时)');
+                        console.warn('TMDB direct timeout:', baseUrl, 'socket空闲超时');
                         proxyReq.destroy(new Error('timeout'));
                     }
                     resolve();
                 });
 
                 proxyReq.on('error', (e) => {
+                    clearTimeout(totalTimer);
                     if (!responded) {
                         console.warn('TMDB direct error:', baseUrl, 'code=' + (e.code || '?'), 'msg=' + e.message);
                     }
