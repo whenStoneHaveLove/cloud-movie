@@ -806,12 +806,12 @@ function proxyTmdb(req, res) {
                     hostname: target.hostname,
                     path: target.pathname + target.search,
                     method: 'GET',
-                    timeout: TMDB_TIMEOUT,
-                    family: 4,              // 强制 IPv4，避免 IPv6 超时
+                    timeout: TMDB_TIMEOUT,   // 数据传输空闲超时
+                    connectTimeout: 6000,    // TCP 连接建立超时 (Node 22+)
+                    family: 4,               // 强制 IPv4，避免 IPv6 超时
                     headers: {
                         'Accept': 'application/json',
                         'User-Agent': 'CloudMovie/1.0',
-                        'Host': target.hostname,
                     },
                 }, (proxyRes) => {
                     if (responded) { proxyRes.resume(); resolve(); return; }
@@ -863,8 +863,18 @@ function proxyTmdb(req, res) {
                     resolve();
                 });
 
+                // 手动连接超时（兼容不支持 connectTimeout 的 Node.js 版本）
+                const connTimer = setTimeout(() => {
+                    if (!responded) {
+                        console.warn('TMDB connection timeout:', baseUrl, '(TCP 连接超时)');
+                        proxyReq.destroy(new Error('connection timeout'));
+                        resolve();
+                    }
+                }, 8000);
+
                 // 监听 socket 级别的错误
                 proxyReq.on('socket', (sock) => {
+                    clearTimeout(connTimer); // socket 建立成功，清除连接超时
                     sock.on('error', (e) => {
                         console.warn('TMDB socket error:', baseUrl, 'code=' + (e.code || '?'), 'msg=' + e.message);
                     });
