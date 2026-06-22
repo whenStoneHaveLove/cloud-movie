@@ -1,3 +1,8 @@
+/**
+ * [调试脚本] 通过本地代理测试和彩云 API 的加密请求/解密响应
+ * 不参与主程序运行，仅用于开发调试。
+ * 正式导入请使用 Web UI（js/share-parser.js）。
+ */
 const crypto = require('crypto');
 const http = require('http');
 
