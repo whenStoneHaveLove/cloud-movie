@@ -499,9 +499,10 @@ async function handleAdmin(req, res) {
 }
 
 // Multiple TMDB API mirrors for China network compatibility
+// 注意：pathname 已包含 /3/ 前缀，baseUrl 不应重复
 const TMDB_MIRRORS = CONFIG.tmdb?.mirrors || [
-    'https://api.themoviedb.org/3',
-    'https://api.tmdb.org/3',
+    'https://api.themoviedb.org',
+    'https://api.tmdb.org',
 ];
 const TMDB_TIMEOUT = CONFIG.tmdb?.timeout || 12000; // 12 second timeout per mirror
 

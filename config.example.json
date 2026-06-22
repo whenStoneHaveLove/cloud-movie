@@ -3,8 +3,8 @@
     "tmdb": {
         "apiKey": "请填入你的TMDB API KEY",
         "mirrors": [
-            "https://api.themoviedb.org/3",
-            "https://api.tmdb.org/3"
+            "https://api.themoviedb.org",
+            "https://api.tmdb.org"
         ],
         "timeout": 8000
     },
