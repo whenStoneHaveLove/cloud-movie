@@ -801,12 +801,17 @@ function proxyTmdb(req, res) {
             console.log('[TMDB] 直连尝试 ' + (i+1) + '/' + TMDB_MIRRORS.length + ': ' + baseUrl);
 
             await new Promise((resolve) => {
-                const proxyReq = https.request(targetUrl, {
+                const target = new URL(targetUrl);
+                const proxyReq = https.request({
+                    hostname: target.hostname,
+                    path: target.pathname + target.search,
                     method: 'GET',
                     timeout: TMDB_TIMEOUT,
+                    family: 4,              // 强制 IPv4，避免 IPv6 超时
                     headers: {
                         'Accept': 'application/json',
                         'User-Agent': 'CloudMovie/1.0',
+                        'Host': target.hostname,
                     },
                 }, (proxyRes) => {
                     if (responded) { proxyRes.resume(); resolve(); return; }
