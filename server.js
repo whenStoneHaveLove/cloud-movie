@@ -791,11 +791,14 @@ function proxyTmdb(req, res) {
 
     // Strategy 2: Direct connection with mirror fallback (original behavior)
     async function tryDirectMirrors() {
+        console.log('[TMDB] 开始直连，共 ' + TMDB_MIRRORS.length + ' 个镜像');
         for (let i = 0; i < TMDB_MIRRORS.length; i++) {
             if (responded) return;
 
             const baseUrl = TMDB_MIRRORS[i];
             const targetUrl = baseUrl + parsedUrl.pathname + '?' + queryString;
+
+            console.log('[TMDB] 直连尝试 ' + (i+1) + '/' + TMDB_MIRRORS.length + ': ' + baseUrl);
 
             await new Promise((resolve) => {
                 const proxyReq = https.request(targetUrl, {
@@ -867,13 +870,17 @@ function proxyTmdb(req, res) {
         }
     }
 
+    console.log('[TMDB] 请求 ' + parsedUrl.pathname + ' | 代理=' + (LOCAL_PROXY ? LOCAL_PROXY : '未配置→直连'));
+
     // Start with local proxy tunnel（仅当配置了代理时）
     if (LOCAL_PROXY) {
+        console.log('[TMDB] 策略1: 走本地代理 ' + LOCAL_PROXY);
         tryViaProxy().catch((e) => {
             console.error('TMDB tryViaProxy unhandled error:', e.message);
             if (!responded) tryDirectMirrors();
         });
     } else {
+        console.log('[TMDB] 策略2: 直连 TMDB 镜像');
         tryDirectMirrors();
     }
 }
