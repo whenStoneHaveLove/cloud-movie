@@ -77,6 +77,52 @@ node server.js
 
 > 💡 端口默认为 **8081**，如需修改请编辑 `server.js` 中的 `PORT` 常量。
 
+### 4. 服务器部署（后台运行）
+
+#### 方式一：PM2（推荐）
+
+```bash
+# 安装 PM2
+npm install -g pm2
+
+# 启动（确保在项目目录下）
+pm2 start server.js --name cloud-movie
+
+# 设置开机自启
+pm2 save
+pm2 startup
+```
+
+管理命令：
+```bash
+pm2 status          # 查看运行状态
+pm2 logs cloud-movie # 查看日志
+pm2 restart cloud-movie  # 重启
+```
+
+#### 方式二：nohup（轻量）
+
+```bash
+nohup node server.js > server.log 2>&1 &
+```
+
+#### 方式三：宝塔面板 / 1Panel
+
+在面板中创建 Node 项目，启动命令填 `node server.js`，端口设为 `8081`。
+
+### 5. 开放端口
+
+确保服务器防火墙/安全组放行 **8081** 端口（或你自定义的端口）：
+
+```bash
+# Linux (ufw)
+ufw allow 8081
+
+# 云服务器还需在控制台安全组中添加入站规则：TCP 8081
+```
+
+部署完成后，通过 `http://你的服务器IP:8081` 即可访问。如需域名，配置 Nginx/Caddy 反代即可。
+
 ---
 
 ## 📖 使用指南
