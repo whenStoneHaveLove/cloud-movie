@@ -42,7 +42,13 @@ cd cloud-movie
 
 注册 [TMDB](https://www.themoviedb.org/signup) 账号，在 [API 设置](https://www.themoviedb.org/settings/api) 中申请密钥。
 
-编辑 `config.json`：
+```bash
+# 复制配置模板
+cp config.example.json config.json
+
+# 编辑 config.json，填入你的 TMDB Key 和密码
+nano config.json
+```
 
 ```json
 {
