@@ -503,7 +503,7 @@ const TMDB_MIRRORS = CONFIG.tmdb?.mirrors || [
     'https://api.themoviedb.org/3',
     'https://api.tmdb.org/3',
 ];
-const TMDB_TIMEOUT = CONFIG.tmdb?.timeout || 8000; // 8 second timeout per mirror
+const TMDB_TIMEOUT = CONFIG.tmdb?.timeout || 12000; // 12 second timeout per mirror
 
 // Local proxy for bypassing GFW (v2rayN, Clash, etc.)
 const LOCAL_PROXY = CONFIG.proxy || process.env.HTTP_PROXY || '';
@@ -850,17 +850,24 @@ function proxyTmdb(req, res) {
 
                 proxyReq.on('timeout', () => {
                     if (!responded) {
-                        console.warn('TMDB direct timeout:', baseUrl);
-                        proxyReq.destroy();
+                        console.warn('TMDB direct timeout:', baseUrl, '(连接/读写超时)');
+                        proxyReq.destroy(new Error('timeout'));
                     }
                     resolve();
                 });
 
                 proxyReq.on('error', (e) => {
                     if (!responded) {
-                        console.warn('TMDB direct error:', baseUrl, e.message);
+                        console.warn('TMDB direct error:', baseUrl, 'code=' + (e.code || '?'), 'msg=' + e.message);
                     }
                     resolve();
+                });
+
+                // 监听 socket 级别的错误
+                proxyReq.on('socket', (sock) => {
+                    sock.on('error', (e) => {
+                        console.warn('TMDB socket error:', baseUrl, 'code=' + (e.code || '?'), 'msg=' + e.message);
+                    });
                 });
 
                 proxyReq.end();
