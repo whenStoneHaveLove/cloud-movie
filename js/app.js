@@ -72,15 +72,56 @@ const App = (() => {
         } catch (e) { /* ignore */ }
     }
 
+    // movies 三层缓存：内存 → localStorage → 网络
+    let cachedMovies = null;        // 内存缓存
+    const MOVIES_CACHE_KEY = 'cm_movies_cache';
+    const MOVIES_HASH_KEY = 'cm_movies_hash';
+
+    function movieHash(list) {
+        // 只用 ID 列表 + 每个片的 videoUrl 长度做轻量摘要
+        const sig = list.map(m => m.id + '|' + (m.videoUrl ? m.videoUrl.length : 0)).join(',');
+        let h = 0;
+        for (let i = 0; i < sig.length; i++) h = ((h << 5) - h) + sig.charCodeAt(i) | 0;
+        return h.toString(36);
+    }
+
     async function getImportedMovies() {
-        try {
+        // 1. 内存缓存（秒开）
+        if (cachedMovies) return cachedMovies;
+
+        // 2. localStorage 缓存（刷新页面恢复）
+        const raw = localStorage.getItem(MOVIES_CACHE_KEY);
+        if (raw) {
+            try {
+                const cached = JSON.parse(raw);
+                if (Array.isArray(cached) && cached.length) {
+                    cachedMovies = cached;
+                    // 后台异步更新
+                    refreshMoviesCache().catch(() => {});
+                    return cached;
+                }
+            } catch (e) {}
+        }
+
+        // 3. 网络（首次加载）
+        cachedMovies = await refreshMoviesCache();
+        return cachedMovies;
+    }
+
+    async function refreshMoviesCache() {
+        const fresh = await (async () => {
             const res = await fetch('/api/movies');
             if (!res.ok) throw new Error('HTTP ' + res.status);
             return await res.json();
-        } catch (e) {
-            console.error('getImportedMovies failed:', e.message);
-            return [];
-        }
+        })();
+
+        cachedMovies = fresh;
+        // 写入 localStorage
+        try {
+            localStorage.setItem(MOVIES_CACHE_KEY, JSON.stringify(fresh));
+        } catch (e) {}
+
+        return fresh;
     }
 
     async function saveImportedMovies(list) {
@@ -90,6 +131,9 @@ const App = (() => {
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(list),
             });
+            // 更新三级缓存
+            cachedMovies = list;
+            try { localStorage.setItem(MOVIES_CACHE_KEY, JSON.stringify(list)); } catch (e) {}
         } catch (e) {
             console.error('saveImportedMovies failed:', e.message);
         }

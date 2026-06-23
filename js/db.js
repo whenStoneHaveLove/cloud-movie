@@ -54,12 +54,11 @@ const DB = (() => {
         return res.json();
     }
 
-    // 内存缓存（秒级命中）+ IndexedDB（持久化）
+    // 内存缓存（秒级命中）+ IndexedDB（持久化）+ 就绪 Promise
     let memCache = null;
-    let idbReady = false;
-
+    const idbPromise = openCache().then(() => true).catch(() => false);
     // 预打开 IndexedDB
-    openCache().then(() => { idbReady = true; }).catch(() => {});
+    idbPromise;
 
     // 缓存 MD5 摘要
     function simpleHash(str) {
@@ -72,6 +71,7 @@ const DB = (() => {
         const fresh = await api('');
         memCache = fresh;
         const hash = simpleHash(JSON.stringify(fresh));
+        const idbReady = await idbPromise;
         if (idbReady) setCache('all', { data: fresh, _hash: hash, _time: Date.now() }).catch(() => {});
         return fresh;
     }
@@ -80,19 +80,26 @@ const DB = (() => {
         async getAll() {
             // 1. 内存缓存（同页面内秒开）
             if (memCache) return memCache;
-            // 2. IndexedDB（刷新页面时快速恢复）
+            // 2. IndexedDB（等待就绪后再查，刷新页面时快速恢复）
+            const idbReady = await idbPromise;
             if (idbReady) {
                 try {
                     const cached = await getCached('all');
-                    if (cached && cached.data) {
+                    if (cached && cached.data && cached.data.length) {
                         memCache = cached.data;
-                        // 后台更新
-                        fetchAndCache().catch(() => {});
+                        // 后台静默更新（不发新请求阻塞返回）
+                        api('').then(async (fresh) => {
+                            if (fresh && fresh.length) {
+                                memCache = fresh;
+                                const hash = simpleHash(JSON.stringify(fresh));
+                                setCache('all', { data: fresh, _hash: hash, _time: Date.now() }).catch(() => {});
+                            }
+                        }).catch(() => {});
                         return cached.data;
                     }
                 } catch (e) {}
             }
-            // 3. 网络（首次加载）
+            // 3. 网络（首次加载或无缓存）
             return await fetchAndCache();
         },
 
