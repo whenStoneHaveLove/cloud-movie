@@ -1224,13 +1224,6 @@ const Scraper = (() => {
             folderMap[fp].push(f);
         }
         console.log('[Scrape] Step1: ' + Object.keys(folderMap).length + ' 个文件夹路径');
-        // 打印前5个路径作为调试
-        const fpKeys = Object.keys(folderMap);
-        console.log('[Scrape] 路径样例: ' + fpKeys.slice(0, Math.min(5, fpKeys.length)).map(k => '"' + k + '" (' + folderMap[k].length + '个文件)').join(' | '));
-        // 统计文件分布
-        const dist = {};
-        for (const [k, v] of Object.entries(folderMap)) dist[v.length] = (dist[v.length] || 0) + 1;
-        console.log('[Scrape] 文件数分布: ' + Object.entries(dist).map(([cnt, n]) => cnt + '文件:' + n + '组').join(', '));
 
         // Step 2: 合并判断：同上级目录的子文件夹可能属同一部剧
         // 规范化路径（" / " → "/", trim 首尾空格）
@@ -1275,11 +1268,9 @@ const Scraper = (() => {
         }
         parentGroups = mergedGroups;  // 用合并后的替换
 
-        console.log('[Scrape] Step2 结束: parentGroups=' + Object.keys(parentGroups).length + ' 组');
         // Step 3: 构建分组结果
         const groups = [];
         for (const [groupPath, data] of Object.entries(parentGroups)) {
-            console.log('[Scrape] Step3 处理: path=' + groupPath + ', files=' + data.files.length + ', isMovieCollection=' + (data.isMovieCollection || false));
             if (data.files.length === 0) continue;
 
             const parts = groupPath.split('/');
@@ -1370,8 +1361,11 @@ const Scraper = (() => {
                 }).length;
                 const looksLikeSeries = episodePatternCount >= data.files.length * 0.5;
 
-                // 仅有公共前缀匹配或剧集模式时，才排除电影集合判定
-                if (!prefixMatchesTitle && !looksLikeSeries) {
+                // 文件名有公共前缀（如 68.[三国演义].mkv, 30.[三国演义].mkv）→ 剧集，不是电影集合
+                const hasCommonPrefix = commonPrefix && commonPrefix.length >= 2;
+
+                // 公共前缀匹配、剧集模式、或有公共前缀 → 排除电影集合判定
+                if (!prefixMatchesTitle && !looksLikeSeries && !hasCommonPrefix) {
                     const descriptiveCount = data.files.filter(f => {
                         const name = (f.name || '').replace(/\.[^.]+$/, '');
                         return /[\u4e00-\u9fff]/.test(name) && !/^\d{1,4}$/.test(name) && !/第\d+[集话]/.test(name);
@@ -1461,7 +1455,6 @@ const Scraper = (() => {
             });
         }
 
-        console.log('[Scrape] 分组构建完成: ' + groups.length + ' 个最终组');
         return groups;
     }
 
