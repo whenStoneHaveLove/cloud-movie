@@ -1214,7 +1214,7 @@ const Scraper = (() => {
      * 按 folderPath 将文件分组，每组提取刮削线索
      */
     function analyzeImportGroups(files) {
-        console.log('[Scrape] analyzeImportGroups 开始, 输入 ' + files.length + ' 个文件');
+        console.log('[Scrape] v2026-06-23c analyzeImportGroups 开始, 输入 ' + files.length + ' 个文件');
         const folderMap = {};
 
         // Step 1: 按 folderPath 分组
