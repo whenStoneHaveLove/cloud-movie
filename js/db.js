@@ -99,20 +99,29 @@ const DB = (() => {
                 try {
                     const cached = await getCached('all');
                     if (cached && cached.data && cached.data.length) {
+                        console.log('[DB] 命中 IndexedDB 缓存: ' + cached.data.length + ' 条');
                         memCache = cached.data;
                         savedETag = cached._etag || '';
-                        // 后台条件请求：有 ETag 发 If-None-Match → 304 无变化 → 0 字节响应体
                         conditionalFetch(savedETag).then(fresh => {
                             if (fresh) {
+                                console.log('[DB] 后台更新: ' + fresh.length + ' 条');
                                 memCache = fresh;
                                 const hash = simpleHash(JSON.stringify(fresh));
                                 setCache('all', { data: fresh, _hash: hash, _time: Date.now(), _etag: savedETag }).catch(() => {});
+                            } else {
+                                console.log('[DB] 后台检查: 数据未变化 (304)');
                             }
                         }).catch(() => {});
                         return cached.data;
                     }
-                } catch (e) {}
+                    // 缓存存在但为空 → 清掉，走网络
+                    if (cached && cached.data) {
+                        console.log('[DB] 缓存为空数组，清除并走网络');
+                        savedETag = null;
+                    }
+                } catch (e) { console.log('[DB] 缓存读取失败:', e); }
             }
+            console.log('[DB] 走网络加载...');
             return await fetchAndCache();
         },
 

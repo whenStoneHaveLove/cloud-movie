@@ -97,23 +97,32 @@ const App = (() => {
             try {
                 const cached = JSON.parse(raw);
                 if (Array.isArray(cached) && cached.length) {
+                    console.log('[Movies] 命中 localStorage 缓存: ' + cached.length + ' 部');
                     cachedMovies = cached;
                     moviesETag = localStorage.getItem('cm_movies_etag') || '';
-                    // 后台条件请求：304 无变化 → 不拉 body
                     moviesConditionalFetch(moviesETag).then(fresh => {
                         if (fresh) {
+                            console.log('[Movies] 后台更新: ' + fresh.length + ' 部');
                             cachedMovies = fresh;
                             localStorage.setItem(MOVIES_CACHE_KEY, JSON.stringify(fresh));
                             if (moviesETag) localStorage.setItem('cm_movies_etag', moviesETag);
+                        } else {
+                            console.log('[Movies] 后台检查: 数据未变化 (304)');
                         }
                     }).catch(() => {});
                     return cached;
                 }
+                // 缓存为空数组 → 清掉
+                console.log('[Movies] 缓存为空数组，清除并走网络');
+                localStorage.removeItem(MOVIES_CACHE_KEY);
+                localStorage.removeItem('cm_movies_etag');
+                moviesETag = null;
             } catch (e) {}
         }
 
-        // 网络
+        console.log('[Movies] 走网络加载...');
         cachedMovies = await moviesConditionalFetch(null) || [];
+        console.log('[Movies] 网络加载: ' + cachedMovies.length + ' 部');
         localStorage.setItem(MOVIES_CACHE_KEY, JSON.stringify(cachedMovies));
         if (moviesETag) localStorage.setItem('cm_movies_etag', moviesETag);
         return cachedMovies;
