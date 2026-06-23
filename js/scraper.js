@@ -1275,9 +1275,11 @@ const Scraper = (() => {
         }
         parentGroups = mergedGroups;  // 用合并后的替换
 
+        console.log('[Scrape] Step2 结束: parentGroups=' + Object.keys(parentGroups).length + ' 组');
         // Step 3: 构建分组结果
         const groups = [];
         for (const [groupPath, data] of Object.entries(parentGroups)) {
+            console.log('[Scrape] Step3 处理: path=' + groupPath + ', files=' + data.files.length + ', isMovieCollection=' + (data.isMovieCollection || false));
             if (data.files.length === 0) continue;
 
             const parts = groupPath.split('/');
@@ -1459,6 +1461,7 @@ const Scraper = (() => {
             });
         }
 
+        console.log('[Scrape] 分组构建完成: ' + groups.length + ' 个最终组');
         return groups;
     }
 
