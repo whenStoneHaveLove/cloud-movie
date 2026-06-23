@@ -1224,6 +1224,13 @@ const Scraper = (() => {
             folderMap[fp].push(f);
         }
         console.log('[Scrape] Step1: ' + Object.keys(folderMap).length + ' 个文件夹路径');
+        // 打印前5个路径作为调试
+        const fpKeys = Object.keys(folderMap);
+        console.log('[Scrape] 路径样例: ' + fpKeys.slice(0, Math.min(5, fpKeys.length)).map(k => '"' + k + '" (' + folderMap[k].length + '个文件)').join(' | '));
+        // 统计文件分布
+        const dist = {};
+        for (const [k, v] of Object.entries(folderMap)) dist[v.length] = (dist[v.length] || 0) + 1;
+        console.log('[Scrape] 文件数分布: ' + Object.entries(dist).map(([cnt, n]) => cnt + '文件:' + n + '组').join(', '));
 
         // Step 2: 合并判断：同上级目录的子文件夹可能属同一部剧
         // 规范化路径（" / " → "/", trim 首尾空格）
