@@ -72,17 +72,49 @@ const App = (() => {
         } catch (e) { /* ignore */ }
     }
 
-    // movies 三层缓存：内存 → localStorage → ETag 条件网络
+    // movies 三层缓存：内存 → IndexedDB → ETag 条件网络（不用 localStorage，超过 5MB 会崩）
     let cachedMovies = null;
     let moviesETag = null;
-    const MOVIES_CACHE_KEY = 'cm_movies_cache';
+    const MOVIES_IDB_KEY = 'movies_all';
+
+    let moviesIdbReady = false;
+    function openMoviesIdb() {
+        return new Promise((resolve) => {
+            const req = indexedDB.open('CloudMovieMovies', 1);
+            req.onupgradeneeded = () => { req.result.createObjectStore('movies'); };
+            req.onsuccess = () => { moviesIdbReady = true; resolve(req.result); };
+            req.onerror = () => resolve(null);
+        });
+    }
+    const moviesIdbPromise = openMoviesIdb();
+
+    async function moviesIdbGet() {
+        if (!moviesIdbReady) await moviesIdbPromise;
+        const db = await moviesIdbPromise;
+        if (!db) return null;
+        return new Promise((resolve) => {
+            const tx = db.transaction('movies', 'readonly');
+            const req = tx.objectStore('movies').get(MOVIES_IDB_KEY);
+            req.onsuccess = () => resolve(req.result || null);
+            req.onerror = () => resolve(null);
+        });
+    }
+
+    async function moviesIdbSet(value) {
+        if (!moviesIdbReady) await moviesIdbPromise;
+        const db = await moviesIdbPromise;
+        if (!db) return;
+        const tx = db.transaction('movies', 'readwrite');
+        tx.objectStore('movies').put(value, MOVIES_IDB_KEY);
+        return new Promise(resolve => { tx.oncomplete = resolve; tx.onerror = resolve; });
+    }
 
     // 带 ETag 的条件请求
     async function moviesConditionalFetch(etag) {
         const headers = { 'Content-Type': 'application/json' };
         if (etag) headers['If-None-Match'] = etag;
         const res = await fetch('/api/movies', { headers });
-        if (res.status === 304) return null;  // 没变化 → 0 字节响应
+        if (res.status === 304) return null;
         if (!res.ok) throw new Error('HTTP ' + res.status);
         moviesETag = res.headers.get('ETag') || '';
         return await res.json();
@@ -91,40 +123,35 @@ const App = (() => {
     async function getImportedMovies() {
         if (cachedMovies) return cachedMovies;
 
-        // localStorage 缓存
-        const raw = localStorage.getItem(MOVIES_CACHE_KEY);
-        if (raw) {
-            try {
-                const cached = JSON.parse(raw);
-                if (Array.isArray(cached) && cached.length) {
-                    console.log('[Movies] 命中 localStorage 缓存: ' + cached.length + ' 部');
-                    cachedMovies = cached;
-                    moviesETag = localStorage.getItem('cm_movies_etag') || '';
-                    moviesConditionalFetch(moviesETag).then(fresh => {
-                        if (fresh) {
-                            console.log('[Movies] 后台更新: ' + fresh.length + ' 部');
-                            cachedMovies = fresh;
-                            localStorage.setItem(MOVIES_CACHE_KEY, JSON.stringify(fresh));
-                            if (moviesETag) localStorage.setItem('cm_movies_etag', moviesETag);
-                        } else {
-                            console.log('[Movies] 后台检查: 数据未变化 (304)');
-                        }
-                    }).catch(() => {});
-                    return cached;
+        // IndexedDB 缓存（无大小限制）
+        const idbCached = await moviesIdbGet();
+        if (idbCached && idbCached.data && Array.isArray(idbCached.data) && idbCached.data.length) {
+            console.log('[Movies] 命中 IndexedDB 缓存: ' + idbCached.data.length + ' 部');
+            cachedMovies = idbCached.data;
+            moviesETag = idbCached._etag || '';
+            // 后台条件请求
+            moviesConditionalFetch(moviesETag).then(fresh => {
+                if (fresh) {
+                    console.log('[Movies] 后台更新: ' + fresh.length + ' 部');
+                    cachedMovies = fresh;
+                    moviesIdbSet({ data: fresh, _etag: moviesETag }).catch(() => {});
+                } else {
+                    console.log('[Movies] 后台检查: 数据未变化 (304)');
                 }
-                // 缓存为空数组 → 清掉
-                console.log('[Movies] 缓存为空数组，清除并走网络');
-                localStorage.removeItem(MOVIES_CACHE_KEY);
-                localStorage.removeItem('cm_movies_etag');
-                moviesETag = null;
-            } catch (e) {}
+            }).catch(() => {});
+            return cachedMovies;
+        }
+
+        // 缓存为空数组 → 清掉
+        if (idbCached && idbCached.data) {
+            console.log('[Movies] 缓存为空数组，清除并走网络');
+            moviesETag = null;
         }
 
         console.log('[Movies] 走网络加载...');
         cachedMovies = await moviesConditionalFetch(null) || [];
         console.log('[Movies] 网络加载: ' + cachedMovies.length + ' 部');
-        localStorage.setItem(MOVIES_CACHE_KEY, JSON.stringify(cachedMovies));
-        if (moviesETag) localStorage.setItem('cm_movies_etag', moviesETag);
+        moviesIdbSet({ data: cachedMovies, _etag: moviesETag }).catch(() => {});
         return cachedMovies;
     }
 
@@ -136,8 +163,8 @@ const App = (() => {
                 body: JSON.stringify(list),
             });
             cachedMovies = list;
-            moviesETag = null;  // 写入后 ETag 变了，下次走全量刷新
-            try { localStorage.setItem(MOVIES_CACHE_KEY, JSON.stringify(list)); } catch (e) {}
+            moviesETag = null;
+            moviesIdbSet({ data: list, _etag: '' }).catch(() => {});
         } catch (e) {
             console.error('saveImportedMovies failed:', e.message);
         }
