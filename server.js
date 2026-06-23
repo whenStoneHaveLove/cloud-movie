@@ -213,12 +213,25 @@ function readBody(req) {
 
 function sendJSON(res, statusCode, data) {
     const body = JSON.stringify(data);
-    res.writeHead(statusCode, {
-        'Content-Type': 'application/json; charset=utf-8',
-        'Access-Control-Allow-Origin': '*',
-        'Content-Length': Buffer.byteLength(body),
-    });
-    res.end(body);
+    // gzip 压缩（>1KB 大响应）
+    const acceptEncoding = res.req.headers['accept-encoding'] || '';
+    if (acceptEncoding.includes('gzip') && body.length > 1024) {
+        const compressed = zlib.gzipSync(body);
+        res.writeHead(statusCode, {
+            'Content-Type': 'application/json; charset=utf-8',
+            'Access-Control-Allow-Origin': '*',
+            'Content-Encoding': 'gzip',
+            'Content-Length': compressed.length,
+        });
+        res.end(compressed);
+    } else {
+        res.writeHead(statusCode, {
+            'Content-Type': 'application/json; charset=utf-8',
+            'Access-Control-Allow-Origin': '*',
+            'Content-Length': Buffer.byteLength(body),
+        });
+        res.end(body);
+    }
 }
 
 /**
@@ -556,14 +569,30 @@ function serveStatic(req, res) {
     const ext = path.extname(filePath);
     const contentType = MIME[ext] || 'application/octet-stream';
 
+    // 检查是否支持 gzip
+    const acceptEncoding = req.headers['accept-encoding'] || '';
+    const canGzip = acceptEncoding.includes('gzip');
+
     fs.readFile(filePath, (err, data) => {
         if (err) {
             res.writeHead(404, { 'Content-Type': 'text/plain' });
             res.end('Not Found');
             return;
         }
-        res.writeHead(200, { 'Content-Type': contentType });
-        res.end(data);
+        // 对 JSON/JS/CSS/HTML/SVG 开启 gzip
+        const compressible = /\.(json|js|css|html|svg)$/.test(ext);
+        if (canGzip && compressible && data.length > 1024) {
+            const compressed = zlib.gzipSync(data);
+            res.writeHead(200, {
+                'Content-Type': contentType,
+                'Content-Encoding': 'gzip',
+                'Content-Length': compressed.length,
+            });
+            res.end(compressed);
+        } else {
+            res.writeHead(200, { 'Content-Type': contentType });
+            res.end(data);
+        }
     });
 }
 
