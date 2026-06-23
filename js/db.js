@@ -22,9 +22,10 @@ const DB = (() => {
     }
 
     // 从缓存读
+    let _dbInstance = null;
     async function getCached(key) {
-        if (!cacheReady) await openCache();
-        const db = await openCache();
+        if (!_dbInstance) _dbInstance = await openCache();
+        const db = _dbInstance;
         return new Promise((resolve) => {
             const tx = db.transaction(CACHE_STORE, 'readonly');
             const req = tx.objectStore(CACHE_STORE).get(key);

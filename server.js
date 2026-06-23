@@ -173,19 +173,15 @@ function writeJSON(fileName, data) {
     const tmpPath = filePath + '.tmp';
 
     if (!fileLocks[fileName]) fileLocks[fileName] = Promise.resolve();
-    // Queue writes to prevent corruption
+    // Queue writes to prevent corruption（catch 保证单次失败不阻塞后续写入）
     fileLocks[fileName] = fileLocks[fileName].then(() => {
-        return new Promise((resolve, reject) => {
-            try {
-                fs.writeFileSync(tmpPath, JSON.stringify(data, null, 2), 'utf8');
-                fs.renameSync(tmpPath, filePath);
-                resolve();
-            } catch (e) {
-                console.error(`writeJSON(${fileName}) error:`, e.message);
-                reject(e);
-            }
-        });
-    });
+        try {
+            fs.writeFileSync(tmpPath, JSON.stringify(data, null, 2), 'utf8');
+            fs.renameSync(tmpPath, filePath);
+        } catch (e) {
+            console.error(`writeJSON(${fileName}) error:`, e.message);
+        }
+    }).catch(() => {});
     return fileLocks[fileName];
 }
 
