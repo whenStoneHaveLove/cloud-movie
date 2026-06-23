@@ -54,35 +54,46 @@ const DB = (() => {
         return res.json();
     }
 
-    // 缓存 MD5 摘要（用于增量更新判断）
+    // 内存缓存（秒级命中）+ IndexedDB（持久化）
+    let memCache = null;
+    let idbReady = false;
+
+    // 预打开 IndexedDB
+    openCache().then(() => { idbReady = true; }).catch(() => {});
+
+    // 缓存 MD5 摘要
     function simpleHash(str) {
         let h = 0;
         for (let i = 0; i < Math.min(str.length, 5000); i++) h = ((h << 5) - h) + str.charCodeAt(i);
         return Math.abs(h).toString(36);
     }
 
+    async function fetchAndCache() {
+        const fresh = await api('');
+        memCache = fresh;
+        const hash = simpleHash(JSON.stringify(fresh));
+        if (idbReady) setCache('all', { data: fresh, _hash: hash, _time: Date.now() }).catch(() => {});
+        return fresh;
+    }
+
     return {
         async getAll() {
-            // 先尝试缓存
-            try {
-                const cached = await getCached('all');
-                if (cached) {
-                    // 后台静默刷新
-                    api('').then(async (fresh) => {
-                        const hash = simpleHash(JSON.stringify(fresh));
-                        if (hash !== cached._hash) {
-                            await setCache('all', { data: fresh, _hash: hash, _time: Date.now() });
-                        }
-                    }).catch(() => {});
-                    return cached.data;
-                }
-            } catch (e) { /* 缓存不可用，走网络 */ }
-
-            // 首次加载：存缓存
-            const fresh = await api('');
-            const hash = simpleHash(JSON.stringify(fresh));
-            setCache('all', { data: fresh, _hash: hash, _time: Date.now() }).catch(() => {});
-            return fresh;
+            // 1. 内存缓存（同页面内秒开）
+            if (memCache) return memCache;
+            // 2. IndexedDB（刷新页面时快速恢复）
+            if (idbReady) {
+                try {
+                    const cached = await getCached('all');
+                    if (cached && cached.data) {
+                        memCache = cached.data;
+                        // 后台更新
+                        fetchAndCache().catch(() => {});
+                        return cached.data;
+                    }
+                } catch (e) {}
+            }
+            // 3. 网络（首次加载）
+            return await fetchAndCache();
         },
 
         async get(id) {
