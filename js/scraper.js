@@ -1322,10 +1322,10 @@ const Scraper = (() => {
                 }
             }
 
-            let mediaType = pathMediaType || 'movie';
+            let mediaType = pathMediaType || (data.files.length >= 3 ? 'tv' : 'movie');
             // 调试：路径分类结果
             if (title && title.length >= 2) {
-                console.log('[Group] 路径分类: "' + title + '" → pathMediaType=' + pathMediaType + ', final=' + mediaType + ', files=' + data.files.length + ', path=' + groupPath.substring(Math.max(0, groupPath.length - 60)));
+                console.log('[Group] 路径分类: "' + title + '" → pathMediaType=' + pathMediaType + ', default=' + (pathMediaType || (data.files.length >= 3 ? 'tv' : 'movie')) + ', files=' + data.files.length + ', path=' + groupPath.substring(Math.max(0, groupPath.length - 60)));
             }
             let isMovieCollection = false;
 
