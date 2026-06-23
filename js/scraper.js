@@ -1215,7 +1215,7 @@ const Scraper = (() => {
      * 按 folderPath 将文件分组，每组提取刮削线索
      */
     function analyzeImportGroups(files) {
-        console.log('[Scrape] v2026-06-23e analyzeImportGroups 开始, 输入 ' + files.length + ' 个文件');
+        console.log('[Scrape] analyzeImportGroups 开始, 输入 ' + files.length + ' 个文件');
         const folderMap = {};
 
         // Step 1: 按 folderPath 分组
@@ -1324,10 +1324,6 @@ const Scraper = (() => {
             }
 
             let mediaType = pathMediaType || (data.files.length >= 3 ? 'tv' : 'movie');
-            // 调试：路径分类结果
-            if (title && title.length >= 2) {
-                console.log('[Group] 路径分类: "' + title + '" → pathMediaType=' + pathMediaType + ', default=' + (pathMediaType || (data.files.length >= 3 ? 'tv' : 'movie')) + ', files=' + data.files.length + ', path=' + groupPath.substring(Math.max(0, groupPath.length - 60)));
-            }
             let isMovieCollection = false;
 
             // 路径已明确分类 → 直接信任，不做文件名猜谜
