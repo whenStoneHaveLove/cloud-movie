@@ -1171,14 +1171,15 @@ const Scraper = (() => {
     }
 
     /**
-     * 找公共前缀（剥离尾部数字）
+     * 找公共前缀（剥离首尾数字，如 68.[三国演义] → [三国演义]）
      */
     function findCommonPrefix(names) {
         if (!names.length) return '';
-        let prefix = names[0].replace(/\.[^.]+$/, '');
-        prefix = prefix.replace(/\d+$/, '');
+        let prefix = names[0].replace(/\.[^.]+$/, '');   // 去扩展名
+        prefix = prefix.replace(/\d+$/, '');              // 去尾部数字
+        prefix = prefix.replace(/^\d+[.\-_\s·]*/, '');   // 去开头数字+分隔符（68. → 空）
         if (prefix.length < 2) return '';
-        const count = names.filter(n => n.startsWith(prefix)).length;
+        const count = names.filter(n => n.includes(prefix)).length;
         return count / names.length >= 0.6 ? prefix : '';
     }
 
@@ -1214,7 +1215,7 @@ const Scraper = (() => {
      * 按 folderPath 将文件分组，每组提取刮削线索
      */
     function analyzeImportGroups(files) {
-        console.log('[Scrape] v2026-06-23c analyzeImportGroups 开始, 输入 ' + files.length + ' 个文件');
+        console.log('[Scrape] v2026-06-23d analyzeImportGroups 开始, 输入 ' + files.length + ' 个文件');
         const folderMap = {};
 
         // Step 1: 按 folderPath 分组
