@@ -195,6 +195,31 @@ function writeJSON(fileName, data) {
 const META_FILE = 'metadata.json';
 const MOVIES_FILE = 'movies.json';
 
+// 简单 ETag：文件 mtime + 数据长度（轻量且准确）
+function getFileETag(fileName) {
+    try {
+        const stat = fs.statSync(path.join(DATA_DIR, fileName));
+        return `"${stat.mtimeMs.toString(36)}-${stat.size.toString(36)}"`;
+    } catch (e) {
+        return null;
+    }
+}
+
+// 检查请求的 If-None-Match，匹配则返回 304
+function checkNotModified(req, res, etag) {
+    const clientETag = req.headers['if-none-match'];
+    if (clientETag && etag && clientETag === etag) {
+        res.writeHead(304, {
+            'ETag': etag,
+            'Access-Control-Allow-Origin': '*',
+            'Cache-Control': 'no-cache',
+        });
+        res.end();
+        return true;
+    }
+    return false;
+}
+
 function readBody(req) {
     return new Promise((resolve, reject) => {
         const chunks = [];
@@ -268,8 +293,18 @@ async function handleMetadata(req, res) {
         if (!id) {
             // /api/metadata
             if (method === 'GET') {
+                const etag = getFileETag(META_FILE);
+                if (etag && checkNotModified(req, res, etag)) return;
                 const data = readJSON(META_FILE, []);
-                sendJSON(res, 200, data);
+                const body = JSON.stringify(data);
+                res.writeHead(200, {
+                    'Content-Type': 'application/json; charset=utf-8',
+                    'Access-Control-Allow-Origin': '*',
+                    'ETag': etag || '',
+                    'Cache-Control': 'no-cache',
+                    'Content-Length': Buffer.byteLength(body),
+                });
+                res.end(body);
             } else if (method === 'PUT') {
                 // Bulk replace (for bulk import)
                 const records = await readBody(req);
@@ -328,8 +363,18 @@ async function handleMovies(req, res) {
 
     try {
         if (method === 'GET') {
+            const etag = getFileETag(MOVIES_FILE);
+            if (etag && checkNotModified(req, res, etag)) return;
             const data = readJSON(MOVIES_FILE, []);
-            sendJSON(res, 200, data);
+            const body = JSON.stringify(data);
+            res.writeHead(200, {
+                'Content-Type': 'application/json; charset=utf-8',
+                'Access-Control-Allow-Origin': '*',
+                'ETag': etag || '',
+                'Cache-Control': 'no-cache',
+                'Content-Length': Buffer.byteLength(body),
+            });
+            res.end(body);
         } else if (method === 'PUT') {
             const movies = await readBody(req);
             if (!Array.isArray(movies)) {

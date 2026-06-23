@@ -47,59 +47,72 @@ const DB = (() => {
             headers: { 'Content-Type': 'application/json' },
             ...options,
         });
+        if (res.status === 304) return { _notModified: true };
         if (!res.ok) {
             const err = await res.json().catch(() => ({ error: res.statusText }));
             throw new Error(err.error || `HTTP ${res.status}`);
         }
-        return res.json();
+        const data = await res.json();
+        data._etag = res.headers.get('ETag') || '';
+        return data;
     }
 
-    // 内存缓存（秒级命中）+ IndexedDB（持久化）+ 就绪 Promise
+    // 内存缓存 + IndexedDB + ETag 条件请求
     let memCache = null;
+    let savedETag = null;
     const idbPromise = openCache().then(() => true).catch(() => false);
-    // 预打开 IndexedDB
     idbPromise;
 
-    // 缓存 MD5 摘要
     function simpleHash(str) {
         let h = 0;
         for (let i = 0; i < Math.min(str.length, 5000); i++) h = ((h << 5) - h) + str.charCodeAt(i);
         return Math.abs(h).toString(36);
     }
 
+    // 带 ETag 的条件请求：数据没变返回 null（网络只需要几个字节的 304 响应头）
+    async function conditionalFetch(etag) {
+        const headers = { 'Content-Type': 'application/json' };
+        if (etag) headers['If-None-Match'] = etag;
+        const res = await fetch(API_BASE, { headers });
+        if (res.status === 304) return null;
+        if (!res.ok) return null;
+        const data = await res.json();
+        savedETag = res.headers.get('ETag') || '';
+        return data;
+    }
+
     async function fetchAndCache() {
-        const fresh = await api('');
+        const fresh = await conditionalFetch(null);
+        if (!fresh) return [];
         memCache = fresh;
         const hash = simpleHash(JSON.stringify(fresh));
         const idbReady = await idbPromise;
-        if (idbReady) setCache('all', { data: fresh, _hash: hash, _time: Date.now() }).catch(() => {});
+        if (idbReady) setCache('all', { data: fresh, _hash: hash, _time: Date.now(), _etag: savedETag }).catch(() => {});
         return fresh;
     }
 
     return {
         async getAll() {
-            // 1. 内存缓存（同页面内秒开）
             if (memCache) return memCache;
-            // 2. IndexedDB（等待就绪后再查，刷新页面时快速恢复）
             const idbReady = await idbPromise;
             if (idbReady) {
                 try {
                     const cached = await getCached('all');
                     if (cached && cached.data && cached.data.length) {
                         memCache = cached.data;
-                        // 后台静默更新（不发新请求阻塞返回）
-                        api('').then(async (fresh) => {
-                            if (fresh && fresh.length) {
+                        savedETag = cached._etag || '';
+                        // 后台条件请求：有 ETag 发 If-None-Match → 304 无变化 → 0 字节响应体
+                        conditionalFetch(savedETag).then(fresh => {
+                            if (fresh) {
                                 memCache = fresh;
                                 const hash = simpleHash(JSON.stringify(fresh));
-                                setCache('all', { data: fresh, _hash: hash, _time: Date.now() }).catch(() => {});
+                                setCache('all', { data: fresh, _hash: hash, _time: Date.now(), _etag: savedETag }).catch(() => {});
                             }
                         }).catch(() => {});
                         return cached.data;
                     }
                 } catch (e) {}
             }
-            // 3. 网络（首次加载或无缓存）
             return await fetchAndCache();
         },
 
@@ -107,11 +120,19 @@ const DB = (() => {
             return await api(id);
         },
 
+        // 写入失效缓存（下次 getAll 会走条件请求刷新）
+        _invalidate() {
+            memCache = null;
+            savedETag = null;
+        },
+
         async put(record) {
-            return await api(record.id, {
+            const result = await api(record.id, {
                 method: 'PUT',
                 body: JSON.stringify(record),
             });
+            this._invalidate();
+            return result;
         },
 
         async batchMerge(records) {
@@ -120,23 +141,30 @@ const DB = (() => {
                 method: 'POST',
                 body: JSON.stringify(records),
             });
+            this._invalidate();
             return data.added || 0;
         },
 
         async bulkPut(records) {
             if (!Array.isArray(records) || records.length === 0) return 0;
-            return await api('', {
+            const result = await api('', {
                 method: 'PUT',
                 body: JSON.stringify(records),
             });
+            this._invalidate();
+            return result;
         },
 
         async delete(id) {
-            return await api(id, { method: 'DELETE' });
+            const result = await api(id, { method: 'DELETE' });
+            this._invalidate();
+            return result;
         },
 
         async clear() {
-            return await api('', { method: 'DELETE' });
+            const result = await api('', { method: 'DELETE' });
+            this._invalidate();
+            return result;
         },
 
         async count() {

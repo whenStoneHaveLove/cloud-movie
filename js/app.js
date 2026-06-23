@@ -72,56 +72,51 @@ const App = (() => {
         } catch (e) { /* ignore */ }
     }
 
-    // movies 三层缓存：内存 → localStorage → 网络
-    let cachedMovies = null;        // 内存缓存
+    // movies 三层缓存：内存 → localStorage → ETag 条件网络
+    let cachedMovies = null;
+    let moviesETag = null;
     const MOVIES_CACHE_KEY = 'cm_movies_cache';
-    const MOVIES_HASH_KEY = 'cm_movies_hash';
 
-    function movieHash(list) {
-        // 只用 ID 列表 + 每个片的 videoUrl 长度做轻量摘要
-        const sig = list.map(m => m.id + '|' + (m.videoUrl ? m.videoUrl.length : 0)).join(',');
-        let h = 0;
-        for (let i = 0; i < sig.length; i++) h = ((h << 5) - h) + sig.charCodeAt(i) | 0;
-        return h.toString(36);
+    // 带 ETag 的条件请求
+    async function moviesConditionalFetch(etag) {
+        const headers = { 'Content-Type': 'application/json' };
+        if (etag) headers['If-None-Match'] = etag;
+        const res = await fetch('/api/movies', { headers });
+        if (res.status === 304) return null;  // 没变化 → 0 字节响应
+        if (!res.ok) throw new Error('HTTP ' + res.status);
+        moviesETag = res.headers.get('ETag') || '';
+        return await res.json();
     }
 
     async function getImportedMovies() {
-        // 1. 内存缓存（秒开）
         if (cachedMovies) return cachedMovies;
 
-        // 2. localStorage 缓存（刷新页面恢复）
+        // localStorage 缓存
         const raw = localStorage.getItem(MOVIES_CACHE_KEY);
         if (raw) {
             try {
                 const cached = JSON.parse(raw);
                 if (Array.isArray(cached) && cached.length) {
                     cachedMovies = cached;
-                    // 后台异步更新
-                    refreshMoviesCache().catch(() => {});
+                    moviesETag = localStorage.getItem('cm_movies_etag') || '';
+                    // 后台条件请求：304 无变化 → 不拉 body
+                    moviesConditionalFetch(moviesETag).then(fresh => {
+                        if (fresh) {
+                            cachedMovies = fresh;
+                            localStorage.setItem(MOVIES_CACHE_KEY, JSON.stringify(fresh));
+                            if (moviesETag) localStorage.setItem('cm_movies_etag', moviesETag);
+                        }
+                    }).catch(() => {});
                     return cached;
                 }
             } catch (e) {}
         }
 
-        // 3. 网络（首次加载）
-        cachedMovies = await refreshMoviesCache();
+        // 网络
+        cachedMovies = await moviesConditionalFetch(null) || [];
+        localStorage.setItem(MOVIES_CACHE_KEY, JSON.stringify(cachedMovies));
+        if (moviesETag) localStorage.setItem('cm_movies_etag', moviesETag);
         return cachedMovies;
-    }
-
-    async function refreshMoviesCache() {
-        const fresh = await (async () => {
-            const res = await fetch('/api/movies');
-            if (!res.ok) throw new Error('HTTP ' + res.status);
-            return await res.json();
-        })();
-
-        cachedMovies = fresh;
-        // 写入 localStorage
-        try {
-            localStorage.setItem(MOVIES_CACHE_KEY, JSON.stringify(fresh));
-        } catch (e) {}
-
-        return fresh;
     }
 
     async function saveImportedMovies(list) {
@@ -131,8 +126,8 @@ const App = (() => {
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(list),
             });
-            // 更新三级缓存
             cachedMovies = list;
+            moviesETag = null;  // 写入后 ETag 变了，下次走全量刷新
             try { localStorage.setItem(MOVIES_CACHE_KEY, JSON.stringify(list)); } catch (e) {}
         } catch (e) {
             console.error('saveImportedMovies failed:', e.message);
