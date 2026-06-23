@@ -236,23 +236,25 @@ function readBody(req) {
     });
 }
 
-function sendJSON(res, statusCode, data) {
+function sendJSON(res, statusCode, data, extraHeaders = {}) {
     const body = JSON.stringify(data);
-    // gzip 压缩（>1KB 大响应）
+    const baseHeaders = {
+        'Content-Type': 'application/json; charset=utf-8',
+        'Access-Control-Allow-Origin': '*',
+        ...extraHeaders,
+    };
     const acceptEncoding = res.req.headers['accept-encoding'] || '';
     if (acceptEncoding.includes('gzip') && body.length > 1024) {
         const compressed = zlib.gzipSync(body);
         res.writeHead(statusCode, {
-            'Content-Type': 'application/json; charset=utf-8',
-            'Access-Control-Allow-Origin': '*',
+            ...baseHeaders,
             'Content-Encoding': 'gzip',
             'Content-Length': compressed.length,
         });
         res.end(compressed);
     } else {
         res.writeHead(statusCode, {
-            'Content-Type': 'application/json; charset=utf-8',
-            'Access-Control-Allow-Origin': '*',
+            ...baseHeaders,
             'Content-Length': Buffer.byteLength(body),
         });
         res.end(body);
@@ -296,29 +298,7 @@ async function handleMetadata(req, res) {
                 const etag = getFileETag(META_FILE);
                 if (etag && checkNotModified(req, res, etag)) return;
                 const data = readJSON(META_FILE, []);
-                const body = JSON.stringify(data);
-                const acceptEncoding = req.headers['accept-encoding'] || '';
-                if (acceptEncoding.includes('gzip') && body.length > 1024) {
-                    const compressed = zlib.gzipSync(body);
-                    res.writeHead(200, {
-                        'Content-Type': 'application/json; charset=utf-8',
-                        'Access-Control-Allow-Origin': '*',
-                        'ETag': etag || '',
-                        'Cache-Control': 'no-cache',
-                        'Content-Encoding': 'gzip',
-                        'Content-Length': compressed.length,
-                    });
-                    res.end(compressed);
-                } else {
-                    res.writeHead(200, {
-                        'Content-Type': 'application/json; charset=utf-8',
-                        'Access-Control-Allow-Origin': '*',
-                        'ETag': etag || '',
-                        'Cache-Control': 'no-cache',
-                        'Content-Length': Buffer.byteLength(body),
-                    });
-                    res.end(body);
-                }
+                sendJSON(res, 200, data, { 'ETag': etag || '', 'Cache-Control': 'no-cache' });
             } else if (method === 'PUT') {
                 // Bulk replace (for bulk import)
                 const records = await readBody(req);
@@ -380,29 +360,7 @@ async function handleMovies(req, res) {
             const etag = getFileETag(MOVIES_FILE);
             if (etag && checkNotModified(req, res, etag)) return;
             const data = readJSON(MOVIES_FILE, []);
-            const body = JSON.stringify(data);
-            const acceptEncoding = req.headers['accept-encoding'] || '';
-            if (acceptEncoding.includes('gzip') && body.length > 1024) {
-                const compressed = zlib.gzipSync(body);
-                res.writeHead(200, {
-                    'Content-Type': 'application/json; charset=utf-8',
-                    'Access-Control-Allow-Origin': '*',
-                    'ETag': etag || '',
-                    'Cache-Control': 'no-cache',
-                    'Content-Encoding': 'gzip',
-                    'Content-Length': compressed.length,
-                });
-                res.end(compressed);
-            } else {
-                res.writeHead(200, {
-                    'Content-Type': 'application/json; charset=utf-8',
-                    'Access-Control-Allow-Origin': '*',
-                    'ETag': etag || '',
-                    'Cache-Control': 'no-cache',
-                    'Content-Length': Buffer.byteLength(body),
-                });
-                res.end(body);
-            }
+            sendJSON(res, 200, data, { 'ETag': etag || '', 'Cache-Control': 'no-cache' });
         } else if (method === 'PUT') {
             const movies = await readBody(req);
             if (!Array.isArray(movies)) {
