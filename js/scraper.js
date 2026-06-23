@@ -1215,7 +1215,7 @@ const Scraper = (() => {
      * 按 folderPath 将文件分组，每组提取刮削线索
      */
     function analyzeImportGroups(files) {
-        console.log('[Scrape] v2026-06-23d analyzeImportGroups 开始, 输入 ' + files.length + ' 个文件');
+        console.log('[Scrape] v2026-06-23e analyzeImportGroups 开始, 输入 ' + files.length + ' 个文件');
         const folderMap = {};
 
         // Step 1: 按 folderPath 分组
@@ -1339,48 +1339,10 @@ const Scraper = (() => {
                 mediaType = 'tv';
             }
 
-            // 路径无分类信息 → 靠文件名分析
+            // 路径无分类信息 → 3个以上文件直接判为剧集（强制规则，不拆）
             if (!pathMediaType && data.files.length >= 3 && !data.seasons.length) {
-                // 找文件名的公共前缀
-                const fileNames = data.files.map(f => (f.name || '').replace(/\.[^.]+$/, ''));
-                const commonPrefix = findCommonPrefix(fileNames);
-
-                // 如果公共前缀匹配文件夹标题 → 这是一个系列，不是电影集合
-                const prefixMatchesTitle = commonPrefix && commonPrefix.length >= 2 && title &&
-                    title.length >= 2 &&
-                    (commonPrefix.includes(title) || title.includes(commonPrefix));
-
-                // 文件名有公共前缀（如 68.[三国演义].mkv, 30.[三国演义].mkv）→ 剧集，不是电影集合
-                const hasCommonPrefix = commonPrefix && commonPrefix.length >= 2;
-
-                // 有公共前缀就直接判为剧集，不拆
-                if (hasCommonPrefix || prefixMatchesTitle) {
-                    isMovieCollection = false;
-                    mediaType = 'tv';
-                } else {
-                    // 额外检查：文件名是否符合剧集编号模式
-                    const episodePatternCount = data.files.filter(f => {
-                        const name = (f.name || '').replace(/\.[^.]+$/, '');
-                        return /[Ee]\d{1,4}/i.test(name)
-                            || /EP\d{1,4}/i.test(name)
-                            || /第\d+[集话]/.test(name)
-                            || /【\d+】/.test(name)
-                            || /\[\d+\]/.test(name)
-                            || /^\d{1,4}$/.test(name);
-                    }).length;
-                    const looksLikeSeries = episodePatternCount >= data.files.length * 0.5;
-
-                    if (!looksLikeSeries) {
-                        const descriptiveCount = data.files.filter(f => {
-                            const name = (f.name || '').replace(/\.[^.]+$/, '');
-                            return /[\u4e00-\u9fff]/.test(name) && !/^\d{1,4}$/.test(name) && !/第\d+[集话]/.test(name);
-                        }).length;
-                        if (descriptiveCount > data.files.length * 0.6) {
-                            isMovieCollection = true;
-                            mediaType = 'movie';
-                        }
-                    }
-                }
+                isMovieCollection = false;
+                mediaType = 'tv';
             }
 
             if (!isMovieCollection) {
