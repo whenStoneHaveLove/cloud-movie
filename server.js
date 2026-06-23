@@ -680,233 +680,95 @@ function proxyApi(req, res) {
 function proxyTmdb(req, res) {
     if (!TMDB_API_KEY) {
         res.writeHead(500, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({ error: 'TMDB API Key not configured. Add your key to config.json' }));
+        res.end(JSON.stringify({ error: 'TMDB API Key not configured' }));
         return;
     }
 
-    // Extract TMDB path: /api/tmdb/search/multi -> /search/multi
     const tmdbPath = req.url.replace(/^\/api\/tmdb/, '');
     const parsedUrl = new URL(tmdbPath, 'http://localhost');
 
-    // Add API key to query params
     const queryParams = Object.fromEntries(parsedUrl.searchParams);
     queryParams.api_key = TMDB_API_KEY;
     const queryString = new URLSearchParams(queryParams).toString();
 
     let responded = false;
-
-    function safeRespond(statusCode, headers, body) {
+    function ok(status, body) {
         if (responded) return;
         responded = true;
-        try { res.writeHead(statusCode, headers); res.end(body); }
-        catch (e) { console.error('TMDB safeRespond error:', e.message); }
+        res.writeHead(status, { 'Content-Type': 'application/json; charset=utf-8', 'Access-Control-Allow-Origin': '*' });
+        res.end(body);
     }
 
-    // Strategy 1: Try local proxy tunnel (v2rayN/Clash)
-    async function tryViaProxy() {
+    // 如果有代理，走代理；否则直连
+    if (LOCAL_PROXY) {
+        doProxy();
+    } else {
+        doDirect();
+    }
+
+    // ---- 直连模式（和 test-tmdb.js 完全相同的请求方式） ----
+    async function doDirect() {
+        const path = parsedUrl.pathname + '?' + queryString;
+        for (let i = 0; i < TMDB_MIRRORS.length; i++) {
+            if (responded) return;
+            const host = new URL(TMDB_MIRRORS[i]).hostname;
+            try {
+                await directRequest(host, path, i);
+                if (responded) return;
+            } catch (e) {
+                // continue to next mirror
+            }
+        }
+        if (!responded) ok(502, JSON.stringify({ error: 'TMDB 不可达' }));
+    }
+
+    function directRequest(host, path, idx) {
+        return new Promise((resolve) => {
+            const timer = setTimeout(() => {
+                req.destroy();
+                resolve();
+            }, 12000);
+
+            const r = https.request({ hostname: host, path: path, family: 4 }, (proxyRes) => {
+                clearTimeout(timer);
+                const chunks = [];
+                proxyRes.on('data', c => chunks.push(c));
+                proxyRes.on('end', () => ok(proxyRes.statusCode, Buffer.concat(chunks)));
+                proxyRes.on('error', () => resolve());
+            });
+            r.on('error', (e) => {
+                clearTimeout(timer);
+                resolve();
+            });
+            r.end();
+        });
+    }
+
+    // ---- 代理模式（走 v2rayN/Clash tunnel） ----
+    async function doProxy() {
+        const path = parsedUrl.pathname + '?' + queryString;
         let tunnelSocket;
         try {
             tunnelSocket = await createProxyTunnel('api.tmdb.org', 443);
         } catch (e) {
-            console.warn('Local proxy tunnel failed:', e.message, '-> falling back to direct');
-            await tryDirectMirrors();
+            doDirect();
             return;
         }
-
-        // Send request through tunnel - use TLS over the CONNECT socket
-        const reqPath = parsedUrl.pathname + '?' + queryString;
-        const tlsSock = tls.connect({
-            socket: tunnelSocket,
-            servername: 'api.tmdb.org',
-            rejectUnauthorized: false,
-        });
-
-        const tmdbReq = https.request({
-            hostname: 'api.tmdb.org',
-            path: reqPath,
-            method: 'GET',
+        const tlsSock = tls.connect({ socket: tunnelSocket, servername: 'api.tmdb.org', rejectUnauthorized: false });
+        const r = https.request({
+            hostname: 'api.tmdb.org', path, method: 'GET',
             timeout: TMDB_TIMEOUT,
-            headers: {
-                'Accept': 'application/json',
-                'User-Agent': 'CloudMovie/1.0',
-                'Host': 'api.tmdb.org',
-            },
+            headers: { 'Accept': 'application/json', 'User-Agent': 'CloudMovie/1.0', 'Host': 'api.tmdb.org' },
             createConnection: () => tlsSock,
         }, (proxyRes) => {
-            if (responded) { proxyRes.resume(); return; }
-
             const chunks = [];
-            proxyRes.on('data', chunk => chunks.push(chunk));
-            proxyRes.on('error', (e) => {
-                console.error('TMDB proxy stream error:', e.message);
-                safeRespond(502, { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' },
-                    JSON.stringify({ error: 'TMDB 响应中断' }));
-            });
-            proxyRes.on('end', () => {
-                const rawBuf = Buffer.concat(chunks);
-                const encoding = proxyRes.headers['content-encoding'];
-
-                let finalBuf = rawBuf;
-                try {
-                    if (encoding === 'gzip') finalBuf = zlib.gunzipSync(rawBuf);
-                    else if (encoding === 'deflate') finalBuf = zlib.inflateSync(rawBuf);
-                } catch (e) {
-                    console.error('TMDB decompression error:', e.message);
-                }
-
-                // console.log('TMDB proxy OK:', proxyRes.statusCode, parsedUrl.pathname, 'via local proxy');
-
-                safeRespond(proxyRes.statusCode, {
-                    'Content-Type': 'application/json; charset=utf-8',
-                    'Access-Control-Allow-Origin': '*',
-                    'Cache-Control': 'public, max-age=3600',
-                }, finalBuf);
-            });
+            proxyRes.on('data', c => chunks.push(c));
+            proxyRes.on('end', () => ok(proxyRes.statusCode, Buffer.concat(chunks)));
+            proxyRes.on('error', () => {});
         });
-
-        tmdbReq.on('timeout', () => {
-            if (!responded) {
-                console.warn('TMDB proxy request timeout -> trying direct mirrors');
-                tmdbReq.destroy();
-                tlsSock.destroy();
-                tryDirectMirrors();
-            }
-        });
-
-        tmdbReq.on('error', (e) => {
-            if (!responded) {
-                console.warn('TMDB proxy request error:', e.message, '-> trying direct mirrors');
-                tlsSock.destroy();
-                tryDirectMirrors();
-            }
-        });
-
-        tlsSock.on('error', (e) => {
-            if (!responded) {
-                console.warn('TLS socket error:', e.message);
-            }
-        });
-
-        tmdbReq.end();
-    }
-
-    // Strategy 2: Direct connection with mirror fallback (original behavior)
-    async function tryDirectMirrors() {
-        console.log('[TMDB] 开始直连，共 ' + TMDB_MIRRORS.length + ' 个镜像');
-        for (let i = 0; i < TMDB_MIRRORS.length; i++) {
-            if (responded) return;
-
-            const baseUrl = TMDB_MIRRORS[i];
-            const targetUrl = baseUrl + parsedUrl.pathname + '?' + queryString;
-
-            console.log('[TMDB] 直连尝试 ' + (i+1) + '/' + TMDB_MIRRORS.length + ': ' + baseUrl);
-
-            await new Promise((resolve) => {
-                const target = new URL(targetUrl);
-                let resolved = false;
-                // 总超时兜底：10s 无响应则放弃当前镜像
-                const totalTimer = setTimeout(() => {
-                    if (!resolved && !responded) {
-                        console.warn('[TMDB] 全局超时: ' + baseUrl);
-                        resolved = true;
-                        resolve();
-                    }
-                }, TMDB_TIMEOUT);
-
-                const proxyReq = https.request({
-                    hostname: target.hostname,
-                    path: target.pathname + target.search,
-                    method: 'GET',
-                    timeout: TMDB_TIMEOUT,
-                    family: 4,
-                    headers: {
-                        'Accept': 'application/json',
-                        'User-Agent': 'CloudMovie/1.0',
-                    },
-                }, (proxyRes) => {
-                    clearTimeout(totalTimer);
-                    if (responded) { proxyRes.resume(); resolve(); return; }
-                    responded = true;
-
-                    const chunks = [];
-                    proxyRes.on('data', chunk => chunks.push(chunk));
-                    proxyRes.on('error', (e) => {
-                        console.error('TMDB direct stream error:', e.message);
-                        safeRespond(502, { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' },
-                            JSON.stringify({ error: 'TMDB 响应中断' }));
-                        resolve();
-                    });
-                    proxyRes.on('end', () => {
-                        const rawBuf = Buffer.concat(chunks);
-                        const encoding = proxyRes.headers['content-encoding'];
-
-                        let finalBuf = rawBuf;
-                        try {
-                            if (encoding === 'gzip') finalBuf = zlib.gunzipSync(rawBuf);
-                            else if (encoding === 'deflate') finalBuf = zlib.inflateSync(rawBuf);
-                        } catch (e) {
-                            console.error('TMDB decompression error:', e.message);
-                        }
-
-                        // console.log('TMDB direct OK:', proxyRes.statusCode, parsedUrl.pathname, 'via', baseUrl);
-
-                        safeRespond(proxyRes.statusCode, {
-                            'Content-Type': 'application/json; charset=utf-8',
-                            'Access-Control-Allow-Origin': '*',
-                            'Cache-Control': 'public, max-age=3600',
-                        }, finalBuf);
-                        resolve();
-                    });
-                });
-
-                proxyReq.on('timeout', () => {
-                    clearTimeout(totalTimer);
-                    if (!responded) {
-                        console.warn('TMDB direct timeout:', baseUrl, 'socket空闲超时');
-                        proxyReq.destroy(new Error('timeout'));
-                    }
-                    resolve();
-                });
-
-                proxyReq.on('error', (e) => {
-                    clearTimeout(totalTimer);
-                    if (!responded) {
-                        console.warn('TMDB direct error:', baseUrl, 'code=' + (e.code || '?'), 'msg=' + e.message);
-                    }
-                    resolve();
-                });
-
-                // 监听 socket 级别的错误
-                proxyReq.on('socket', (sock) => {
-                    sock.on('error', (e) => {
-                        console.warn('TMDB socket error:', baseUrl, 'code=' + (e.code || '?'), 'msg=' + e.message);
-                    });
-                });
-
-                proxyReq.end();
-            });
-        }
-
-        // All mirrors exhausted
-        if (!responded) {
-            console.error('TMDB: All mirrors failed');
-            safeRespond(502, { 'Content-Type': 'application/json' },
-                JSON.stringify({ error: 'TMDB API 所有方式均不可达。请确认本地代理已开启' }));
-        }
-    }
-
-    console.log('[TMDB] 请求 ' + parsedUrl.pathname + ' | 代理=' + (LOCAL_PROXY ? LOCAL_PROXY : '未配置→直连'));
-
-    // Start with local proxy tunnel（仅当配置了代理时）
-    if (LOCAL_PROXY) {
-        console.log('[TMDB] 策略1: 走本地代理 ' + LOCAL_PROXY);
-        tryViaProxy().catch((e) => {
-            console.error('TMDB tryViaProxy unhandled error:', e.message);
-            if (!responded) tryDirectMirrors();
-        });
-    } else {
-        console.log('[TMDB] 策略2: 直连 TMDB 镜像');
-        tryDirectMirrors();
+        r.on('timeout', () => { r.destroy(); tlsSock.destroy(); doDirect(); });
+        r.on('error', () => { tlsSock.destroy(); doDirect(); });
+        r.end();
     }
 }
 
