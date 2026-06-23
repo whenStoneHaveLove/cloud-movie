@@ -5,7 +5,6 @@ const net = require('net');
 const fs = require('fs');
 const path = require('path');
 const zlib = require('zlib');
-const url = require('url'); // 保留用于 http-proxy-agent 依赖，代码本体用 WHATWG URL
 
 // Load config (必须在 PORT 之前)
 let CONFIG = {};
@@ -680,8 +679,6 @@ function proxyApi(req, res) {
             proxyRes.on('end', () => {
                 const rawBuf = Buffer.concat(resChunks);
                 const encoding = proxyRes.headers['content-encoding'];
-
-                // console.log('Share API proxy:', proxyRes.statusCode, 'len:', rawBuf.length); // 静默，避免刷屏
 
                 let finalBuf = rawBuf;
                 try {

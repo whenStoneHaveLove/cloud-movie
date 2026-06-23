@@ -61,7 +61,6 @@ const DB = (() => {
     let memCache = null;
     let savedETag = null;
     const idbPromise = openCache().then(() => true).catch(() => false);
-    idbPromise;
 
     function simpleHash(str) {
         let h = 0;
@@ -181,9 +180,5 @@ const DB = (() => {
             return all.length;
         },
 
-        async getByIndex(indexName, value) {
-            const all = await this.getAll();
-            return all.filter(r => r[indexName] === value);
-        },
     };
 })();

@@ -578,17 +578,6 @@ const App = (() => {
     /**
      * Get all unique years from scraped movies (for year filter dropdowns)
      */
-    function getAvailableYears() {
-        const years = new Set();
-        for (const m of movies) {
-            const em = enrichMovie(m);
-            if (em.year && /^\d{4}$/.test(em.year.toString())) {
-                years.add(parseInt(em.year));
-            }
-        }
-        return [...years].sort((a, b) => b - a);
-    }
-
     /**
      * Get all unique TMDB genres from scraped movies
      */
@@ -917,14 +906,6 @@ const App = (() => {
         });
         const hasItems = Render.historyList(list, deduped);
         empty.style.display = hasItems ? 'none' : 'block';
-    }
-
-    function getGenreMovies(genreTag) {
-        const list = getSeriesList();
-        return list.filter(m => {
-            if (m.genres && m.genres.includes(genreTag)) return true;
-            return m.genre === genreTag;
-        });
     }
 
     // ===== Navigation =====
@@ -1323,11 +1304,6 @@ const App = (() => {
                 <div class="ep-num">${epNum}. ${epName}</div>
             </div>`;
         }).join('');
-    }
-
-    function _escapeHtml(str) {
-        if (!str) return '';
-        return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
     }
 
     function toggleFavFromPlayer() {
