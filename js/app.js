@@ -172,6 +172,12 @@ const App = (() => {
 
     // ===== Metadata Enrichment =====
 
+    // 将 image.tmdb.org 重写为服务端代理（国内 TMDB 图片被墙）
+    function proxyImageUrl(url) {
+        if (!url || !url.includes('image.tmdb.org')) return url;
+        return '/api/img?url=' + encodeURIComponent(url);
+    }
+
     function enrichMovie(movie) {
         const meta = metadataMap[movie.id];
         if (!meta) return movie;
@@ -179,8 +185,8 @@ const App = (() => {
             ...movie,
             title: meta.title || movie.title,
             originalTitle: meta.originalTitle || null,
-            poster: meta.poster || movie.poster,
-            backdrop: meta.backdrop || null,
+            poster: proxyImageUrl(meta.poster || movie.poster),
+            backdrop: proxyImageUrl(meta.backdrop || null),
             desc: meta.overview || movie.desc || '',
             genre: (meta.genres && meta.genres[0]) || movie.genre || '导入',
             genres: meta.genres || (movie.genre ? [movie.genre] : []),

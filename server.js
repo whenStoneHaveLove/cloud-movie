@@ -825,6 +825,42 @@ function proxyTmdb(req, res) {
     }
 }
 
+// 代理 TMDB 图片（image.tmdb.org 国内被墙）
+function proxyImage(req, res) {
+    const parsed = new URL(req.url, 'http://localhost');
+    const targetUrl = parsed.searchParams.get('url');
+    if (!targetUrl || !targetUrl.startsWith('https://image.tmdb.org/')) {
+        res.writeHead(400, { 'Content-Type': 'text/plain' });
+        res.end('Invalid image URL');
+        return;
+    }
+    const imgUrl = new URL(targetUrl);
+    https.get({
+        hostname: imgUrl.hostname,
+        path: imgUrl.pathname + imgUrl.search,
+        family: 4,
+        timeout: 10000,
+        headers: { 'User-Agent': 'CloudMovie/1.0' },
+    }, (imgRes) => {
+        if (imgRes.statusCode >= 300 && imgRes.statusCode < 400 && imgRes.headers.location) {
+            // 跟随重定向
+            const redirect = new URL(imgRes.headers.location);
+            https.get({ hostname: redirect.hostname, path: redirect.pathname, family: 4, timeout: 10000 }, (r2) => {
+                const ct = r2.headers['content-type'] || 'image/jpeg';
+                res.writeHead(200, { 'Content-Type': ct, 'Cache-Control': 'public, max-age=86400' });
+                r2.pipe(res);
+            }).on('error', () => { res.writeHead(502); res.end(); });
+            return;
+        }
+        const ct = imgRes.headers['content-type'] || 'image/jpeg';
+        res.writeHead(200, { 'Content-Type': ct, 'Cache-Control': 'public, max-age=86400' });
+        imgRes.pipe(res);
+    }).on('error', () => {
+        res.writeHead(502);
+        res.end();
+    });
+}
+
 // Serve config status (not the key itself)
 function configStatus(req, res) {
     res.writeHead(200, { 'Content-Type': 'application/json' });
@@ -877,6 +913,8 @@ const server = http.createServer(async (req, res) => {
         proxyTmdb(req, res);
     } else if (req.url === '/api/config') {
         configStatus(req, res);
+    } else if (req.url.startsWith('/api/img')) {
+        proxyImage(req, res);
     } else {
         serveStatic(req, res);
     }
