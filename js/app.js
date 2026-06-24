@@ -50,17 +50,15 @@ const App = (() => {
         renderScrapePanel();
         checkTmdbConfig();
 
-        // Step 3: 后台静默加载 metadata，完成后自动富集
+        // Step 3: 后台静默加载数据，仅存入缓存不刷新界面
         try {
+            // metadata 静默加载（评分等细节点击详情时即可显示）
             const allMeta = await DB.getAll();
             metadataMap = {};
             for (const m of allMeta) {
                 if (m.movieId) metadataMap[m.movieId] = m;
             }
             console.log(`Loaded ${Object.keys(metadataMap).length} metadata records`);
-            // 元数据到达后刷新界面（补充评分、简介等）
-            rebuildSeries();
-            renderHome();
         } catch (e) {
             console.error('Failed to load metadata:', e);
         }
@@ -152,10 +150,8 @@ const App = (() => {
                 for (const c of more) all.push(...c);
                 moviesETag = '';
                 cachedMovies = all;
-                movies = all;
                 moviesIdbSet({ data: all, _etag: '' }).catch(() => {});
-                console.log('[Movies] 后台加载完成: ' + all.length + ' 部');
-                // 不立即刷新界面，等 metadata 到达后统一渲染，避免闪烁
+                console.log('[Movies] 后台静默加载完成: ' + all.length + ' 部，界面保持不变');
             } catch (e) {
                 console.warn('[Movies] 后台批次加载失败，使用首批 ' + firstChunk.length + ' 部:', e.message);
             }
