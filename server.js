@@ -176,8 +176,11 @@ function writeJSON(fileName, data) {
     // Queue writes to prevent corruption（catch 保证单次失败不阻塞后续写入）
     fileLocks[fileName] = fileLocks[fileName].then(() => {
         try {
-            fs.writeFileSync(tmpPath, JSON.stringify(data, null, 2), 'utf8');
+            const raw = JSON.stringify(data, null, 2);
+            fs.writeFileSync(tmpPath, raw, 'utf8');
             fs.renameSync(tmpPath, filePath);
+            // 预写 gzip 版本，后续读取直接 serve 节省 CPU
+            try { fs.writeFileSync(filePath + '.gz', zlib.gzipSync(raw)); } catch (e) {}
         } catch (e) {
             console.error(`writeJSON(${fileName}) error:`, e.message);
         }
@@ -292,6 +295,7 @@ async function handleMetadata(req, res) {
             if (method === 'GET') {
                 const etag = getFileETag(META_FILE);
                 if (etag && checkNotModified(req, res, etag)) return;
+                if (tryServeGzip(res, META_FILE, 200, { 'ETag': etag || '', 'Cache-Control': 'no-cache' })) return;
                 const data = readJSON(META_FILE, []);
                 sendJSON(res, 200, data, { 'ETag': etag || '', 'Cache-Control': 'no-cache' });
             } else if (method === 'PUT') {
@@ -354,6 +358,7 @@ async function handleMovies(req, res) {
         if (method === 'GET') {
             const etag = getFileETag(MOVIES_FILE);
             if (etag && checkNotModified(req, res, etag)) return;
+            if (tryServeGzip(res, MOVIES_FILE, 200, { 'ETag': etag || '', 'Cache-Control': 'no-cache' })) return;
             const data = readJSON(MOVIES_FILE, []);
             sendJSON(res, 200, data, { 'ETag': etag || '', 'Cache-Control': 'no-cache' });
         } else if (method === 'PUT') {
@@ -861,6 +866,30 @@ function proxyImage(req, res) {
     });
 }
 
+// 检查预压缩文件，存在则直接 serve（省 CPU）
+function tryServeGzip(res, fileName, statusCode, extraHeaders) {
+    const gzPath = path.join(DATA_DIR, fileName + '.gz');
+    const jsonPath = path.join(DATA_DIR, fileName);
+    try {
+        if (fs.existsSync(gzPath) && fs.existsSync(jsonPath)) {
+            const gzStat = fs.statSync(gzPath);
+            const jsStat = fs.statSync(jsonPath);
+            if (gzStat.mtimeMs >= jsStat.mtimeMs) {
+                res.writeHead(statusCode, {
+                    'Content-Type': 'application/json; charset=utf-8',
+                    'Access-Control-Allow-Origin': '*',
+                    'Content-Encoding': 'gzip',
+                    'Content-Length': gzStat.size,
+                    ...extraHeaders,
+                });
+                fs.createReadStream(gzPath).pipe(res);
+                return true;
+            }
+        }
+    } catch (e) {}
+    return false;
+}
+
 // Serve config status (not the key itself)
 function configStatus(req, res) {
     res.writeHead(200, { 'Content-Type': 'application/json' });
@@ -940,8 +969,20 @@ process.on('unhandledRejection', (reason) => {
 });
 
 server.listen(PORT, () => {
+    // 启动时补生成缺失的预压缩文件
+    [META_FILE, MOVIES_FILE].forEach(f => {
+        const gzPath = path.join(DATA_DIR, f + '.gz');
+        const jsonPath = path.join(DATA_DIR, f);
+        if (fs.existsSync(jsonPath) && !fs.existsSync(gzPath)) {
+            try {
+                const raw = fs.readFileSync(jsonPath, 'utf8');
+                fs.writeFileSync(gzPath, zlib.gzipSync(raw));
+                console.log(`  预压缩: ${f}.gz ✓`);
+            } catch (e) { console.log(`  预压缩失败: ${f}.gz`); }
+        }
+    });
     console.log(`云盘影院服务器已启动: http://localhost:${PORT}`);
-    console.log(`TMDB API Key: ${TMDB_API_KEY ? '已配置 ✓' : '未配置 ✗ (请在 config.json 中添加 apiKey)'}`);
+    console.log(`TMDB API Key: ${TMDB_API_KEY ? '已配置 ✓' : '未配置 ✗'}`);
     console.log(`本地代理: ${LOCAL_PROXY || '未配置（TMDB将直连，国内服务器建议配置代理）'}`);
     console.log(`TMDB 镜像: ${TMDB_MIRRORS.join(', ')}`);
     console.log(`TMDB 超时: ${TMDB_TIMEOUT}ms`);
