@@ -33,19 +33,7 @@ const App = (() => {
     async function init() {
         applyTheme();
 
-        // Load metadata from server（IndexedDB → data/metadata.json）
-        try {
-            const allMeta = await DB.getAll();
-            metadataMap = {};
-            for (const m of allMeta) {
-                if (m.movieId) metadataMap[m.movieId] = m;
-            }
-            console.log(`Loaded ${Object.keys(metadataMap).length} metadata records`);
-        } catch (e) {
-            console.error('Failed to load metadata:', e);
-        }
-
-        // Load movies from server（localStorage → data/movies.json）
+        // Step 1: 先加载影片列表（movies.json 自带海报+标题，无需等 metadata）
         try {
             movies = await getImportedMovies();
         } catch (e) {
@@ -53,6 +41,7 @@ const App = (() => {
             movies = [];
         }
 
+        // Step 2: 立即渲染（无 metadata 时用原始海报和标题）
         rebuildSeries();
         initGenres();
         renderHome();
@@ -60,6 +49,21 @@ const App = (() => {
         renderHistory();
         renderScrapePanel();
         checkTmdbConfig();
+
+        // Step 3: 后台静默加载 metadata，完成后自动富集
+        try {
+            const allMeta = await DB.getAll();
+            metadataMap = {};
+            for (const m of allMeta) {
+                if (m.movieId) metadataMap[m.movieId] = m;
+            }
+            console.log(`Loaded ${Object.keys(metadataMap).length} metadata records`);
+            // 元数据到达后刷新界面（补充评分、简介等）
+            rebuildSeries();
+            renderHome();
+        } catch (e) {
+            console.error('Failed to load metadata:', e);
+        }
     }
 
     async function checkTmdbConfig() {
