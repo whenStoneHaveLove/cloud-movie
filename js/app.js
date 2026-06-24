@@ -128,24 +128,32 @@ const App = (() => {
         return await res.json();
     }
 
-    // 分批加载 movies（每批 500，多批次并发）
+    // 分批加载 movies：第一批立即返回渲染，剩余后台加载后自动刷新
     async function moviesBatchFetch(batchSize) {
         const res = await fetch('/api/movies?offset=0&limit=' + batchSize);
         const firstChunk = await res.json();
         const total = parseInt(res.headers.get('X-Total-Count')) || firstChunk.length;
         if (total <= batchSize) { moviesETag = ''; return firstChunk; }
 
-        const all = [...firstChunk];
-        const promises = [];
-        for (let i = batchSize; i < total; i += batchSize) {
-            promises.push(
-                fetch('/api/movies?offset=' + i + '&limit=' + batchSize).then(r => r.json())
-            );
-        }
-        const more = await Promise.all(promises);
-        for (const c of more) all.push(...c);
-        moviesETag = '';
-        return all;
+        // 剩余批次后台并发加载
+        (async () => {
+            const all = [...firstChunk];
+            const promises = [];
+            for (let i = batchSize; i < total; i += batchSize) {
+                promises.push(fetch('/api/movies?offset=' + i + '&limit=' + batchSize).then(r => r.json()));
+            }
+            const more = await Promise.all(promises);
+            for (const c of more) all.push(...c);
+            moviesETag = '';
+            cachedMovies = all;
+            movies = all;
+            moviesIdbSet({ data: all, _etag: '' }).catch(() => {});
+            rebuildSeries();
+            renderHome();
+            console.log('[Movies] 后台加载完成: ' + all.length + ' 部');
+        })();
+
+        return firstChunk;
     }
 
     async function getImportedMovies() {
