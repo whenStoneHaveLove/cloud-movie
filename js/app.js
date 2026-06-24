@@ -140,8 +140,8 @@ const App = (() => {
             [firstChunk[i], firstChunk[j]] = [firstChunk[j], firstChunk[i]];
         }
 
-        // 剩余批次后台并发加载
-        (async () => {
+        // 剩余批次后台并发加载（延迟 100ms 确保首批已绘制到屏幕）
+        setTimeout(async () => {
             try {
                 const all = [...firstChunk];
                 const promises = [];
@@ -160,7 +160,7 @@ const App = (() => {
             } catch (e) {
                 console.warn('[Movies] 后台批次加载失败，使用首批 ' + firstChunk.length + ' 部:', e.message);
             }
-        })();
+        }, 100);
 
         return firstChunk;
     }
