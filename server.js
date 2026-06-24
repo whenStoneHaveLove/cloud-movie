@@ -295,9 +295,20 @@ async function handleMetadata(req, res) {
             if (method === 'GET') {
                 const etag = getFileETag(META_FILE);
                 if (etag && checkNotModified(req, res, etag)) return;
-                if (tryServeGzip(res, META_FILE, 200, { 'ETag': etag || '', 'Cache-Control': 'no-cache' })) return;
-                const data = readJSON(META_FILE, []);
-                sendJSON(res, 200, data, { 'ETag': etag || '', 'Cache-Control': 'no-cache' });
+                // 分页支持：?offset=N&limit=M（可选）
+                const urlParams = new URL(req.url, 'http://localhost').searchParams;
+                const offset = parseInt(urlParams.get('offset')) || 0;
+                const limit = parseInt(urlParams.get('limit')) || 0;
+                if (limit <= 0) {
+                    // 无分页参数 → 全量返回（兼容旧客户端 + 预压缩文件）
+                    if (tryServeGzip(res, META_FILE, 200, { 'ETag': etag || '', 'Cache-Control': 'no-cache' })) return;
+                    const data = readJSON(META_FILE, []);
+                    sendJSON(res, 200, data, { 'ETag': etag || '', 'Cache-Control': 'no-cache' });
+                } else {
+                    const data = readJSON(META_FILE, []);
+                    const chunk = data.slice(offset, offset + limit);
+                    sendJSON(res, 200, chunk, { 'X-Total-Count': String(data.length) });
+                }
             } else if (method === 'PUT') {
                 // Bulk replace (for bulk import)
                 const records = await readBody(req);
@@ -358,9 +369,18 @@ async function handleMovies(req, res) {
         if (method === 'GET') {
             const etag = getFileETag(MOVIES_FILE);
             if (etag && checkNotModified(req, res, etag)) return;
-            if (tryServeGzip(res, MOVIES_FILE, 200, { 'ETag': etag || '', 'Cache-Control': 'no-cache' })) return;
-            const data = readJSON(MOVIES_FILE, []);
-            sendJSON(res, 200, data, { 'ETag': etag || '', 'Cache-Control': 'no-cache' });
+            const urlParams = new URL(req.url, 'http://localhost').searchParams;
+            const offset = parseInt(urlParams.get('offset')) || 0;
+            const limit = parseInt(urlParams.get('limit')) || 0;
+            if (limit <= 0) {
+                if (tryServeGzip(res, MOVIES_FILE, 200, { 'ETag': etag || '', 'Cache-Control': 'no-cache' })) return;
+                const data = readJSON(MOVIES_FILE, []);
+                sendJSON(res, 200, data, { 'ETag': etag || '', 'Cache-Control': 'no-cache' });
+            } else {
+                const data = readJSON(MOVIES_FILE, []);
+                const chunk = data.slice(offset, offset + limit);
+                sendJSON(res, 200, chunk, { 'X-Total-Count': String(data.length) });
+            }
         } else if (method === 'PUT') {
             const movies = await readBody(req);
             if (!Array.isArray(movies)) {
