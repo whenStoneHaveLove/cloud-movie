@@ -2498,5 +2498,7 @@ const App = (() => {
         showImportGuard, hideImportGuard, renderScrapePanel, requireAdmin,
         // Smart import
         smartImport, confirmSmartImport, cancelSmartImport,
+        // Image proxy
+        proxyImageUrl,
     };
 })();

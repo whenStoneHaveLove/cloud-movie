@@ -404,7 +404,7 @@ const Render = (() => {
             // For multi-season: render per-season with season selector
             const renderEpCards = (eps, baseIdx) => eps.map((ep, idx) => {
                 const epName = ep.episodeName || ep.name || ep.title || (baseIdx + idx + 1);
-                const epThumb = ep.episodeStill || ep.poster || poster || '';
+                const epThumb = App.proxyImageUrl(ep.episodeStill || ep.poster) || poster || '';
                 const epNum = ep.episodeNumber || (baseIdx + idx + 1);
                 return `
                     <div class="ep-item" onclick="App.playMovie('${ep.id}')">
@@ -447,7 +447,7 @@ const Render = (() => {
             const castCards = cast.slice(0, 14).map(c => {
                 const name = c.name || '';
                 const char = c.character || '';
-                const photo = c.profilePath || c.profile_path || '';
+                const photo = App.proxyImageUrl(c.profilePath || c.profile_path || '');
                 return `
                     <div class="cast-item">
                         <div class="cast-avatar">
