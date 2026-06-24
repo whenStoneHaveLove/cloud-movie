@@ -264,8 +264,8 @@ function sendJSON(res, statusCode, data, extraHeaders = {}) {
  */
 async function handleMetadata(req, res) {
     const method = req.method;
-    // Path: /api/metadata or /api/metadata/meta-xxx
-    const rawPath = req.url.replace('/api/metadata', '');
+    // Path: /api/metadata or /api/metadata/meta-xxx（query 参数剥离）
+    const rawPath = req.url.replace('/api/metadata', '').split('?')[0];
     const id = rawPath.replace(/^\/+/, '') || null;  // e.g. "meta-xxx" or empty
 
     try {
