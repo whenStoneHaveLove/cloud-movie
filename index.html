@@ -8,6 +8,24 @@
     <link rel="apple-touch-icon" href="favicon.svg">
     <link rel="stylesheet" href="css/style.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <!-- iOS 兼容 polyfill（Safari 10-12 缺失的 API） -->
+    <script>
+    // Array.prototype.includes (Safari 11+)
+    if (!Array.prototype.includes) Array.prototype.includes=function(v){return this.indexOf(v)!==-1};
+    // Object.values (Safari 10.1+)
+    if (!Object.values) Object.values=function(o){var r=[];for(var k in o)if(o.hasOwnProperty(k))r.push(o[k]);return r};
+    // Object.entries (Safari 10.1+)
+    if (!Object.entries) Object.entries=function(o){var r=[];for(var k in o)if(o.hasOwnProperty(k))r.push([k,o[k]]);return r};
+    // String.prototype.startsWith (Safari 9+)
+    if (!String.prototype.startsWith) String.prototype.startsWith=function(s,p){p=p||0;return this.indexOf(s,p)===p};
+    // String.prototype.endsWith (Safari 9+)
+    if (!String.prototype.endsWith) String.prototype.endsWith=function(s,p){var t=String(this);p=p===undefined?t.length:p;return t.lastIndexOf(s,p-s.length)>=0};
+    // String.prototype.padStart (Safari 12+)
+    if (!String.prototype.padStart) String.prototype.padStart=function(l,s){s=s||' ';var t=String(this);while(t.length<l)t=s+t;return t};
+    // async/await 检测（iOS 10 Safari 不支持）
+    try { eval('(async function(){})'); if (typeof eval('(async function(){return 1})().then') !== 'function') throw 0; }
+    catch(e) { document.write('<div style="background:#c0392b;color:#fff;text-align:center;padding:12px;font-size:14px;position:fixed;top:0;left:0;right:0;z-index:9999">您的浏览器版本过旧，请使用 iOS 12+ 或 Android 7+ 设备访问</div>'); }
+    </script>
     <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
 </head>
 <body>
