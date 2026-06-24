@@ -269,6 +269,7 @@ button { font-family: inherit; }
     padding: 3px 7px; border-radius: 6px;
     font-size: 0.72rem; font-weight: 600;
     display: flex; align-items: center; gap: 3px;
+    -webkit-backdrop-filter: blur(4px);
     backdrop-filter: blur(4px);
 }
 .card-fav {
@@ -282,7 +283,9 @@ button { font-family: inherit; }
     background: rgba(245, 158, 11, 0.85); color: #fff;
     width: 26px; height: 26px; border-radius: 50%;
     display: flex; align-items: center; justify-content: center;
-    font-size: 0.65rem; backdrop-filter: blur(4px);
+    font-size: 0.65rem;
+    -webkit-backdrop-filter: blur(4px);
+    backdrop-filter: blur(4px);
     box-shadow: 0 2px 6px rgba(0,0,0,0.3);
 }
 
@@ -291,6 +294,7 @@ button { font-family: inherit; }
     background: rgba(108, 92, 231, 0.9); color: #fff;
     padding: 3px 8px; border-radius: 6px;
     font-size: 0.7rem; font-weight: 600;
+    -webkit-backdrop-filter: blur(4px);
     backdrop-filter: blur(4px);
     box-shadow: 0 2px 6px rgba(0,0,0,0.3);
     display: flex; align-items: center; gap: 4px;
@@ -365,7 +369,9 @@ button { font-family: inherit; }
     display: none; position: fixed; inset: 0; z-index: 200;
     background: rgba(0, 0, 0, 0.92);
     align-items: center; justify-content: center;
-    padding: 0; backdrop-filter: blur(10px);
+    padding: 0;
+    -webkit-backdrop-filter: blur(10px);
+    backdrop-filter: blur(10px);
 }
 .modal.open { display: flex; animation: fadeIn 0.2s ease; }
 
@@ -393,7 +399,9 @@ button { font-family: inherit; }
     border: none; background: rgba(0, 0, 0, 0.5);
     color: #fff; font-size: 1.05rem; cursor: pointer;
     display: flex; align-items: center; justify-content: center;
-    transition: background 0.2s; backdrop-filter: blur(4px);
+    transition: background 0.2s;
+    -webkit-backdrop-filter: blur(4px);
+    backdrop-filter: blur(4px);
 }
 .modal-close:hover { background: var(--danger); }
 
@@ -449,6 +457,7 @@ button { font-family: inherit; }
     padding: 14px 22px; border-radius: 12px;
     z-index: 12; pointer-events: none;
     opacity: 0; transition: all 0.25s ease;
+    -webkit-backdrop-filter: blur(4px);
     backdrop-filter: blur(4px);
 }
 .player-seek-feedback.show {
@@ -580,6 +589,7 @@ button { font-family: inherit; }
     border: 1px solid rgba(255,255,255,0.1);
     border-radius: 8px; padding: 4px;
     min-width: 100px; z-index: 20;
+    -webkit-backdrop-filter: blur(12px);
     backdrop-filter: blur(12px);
     box-shadow: 0 8px 24px rgba(0,0,0,0.4);
 }
@@ -975,6 +985,7 @@ button { font-family: inherit; }
     display: flex; align-items: center; justify-content: center;
     padding: 20px;
     animation: fadeIn 0.2s ease;
+    -webkit-backdrop-filter: blur(6px);
     backdrop-filter: blur(6px);
 }
 
@@ -1672,8 +1683,8 @@ button { font-family: inherit; }
     display: flex; align-items: center; gap: 12px;
     padding: 14px 36px; border-radius: 50px; border: none;
     background: rgba(255,255,255,0.15);
-    backdrop-filter: blur(12px);
     -webkit-backdrop-filter: blur(12px);
+    backdrop-filter: blur(12px);
     color: #fff; font-size: 17px; font-weight: 700;
     cursor: pointer; transition: all 0.3s;
     border: 1px solid rgba(255,255,255,0.2);
@@ -1857,7 +1868,9 @@ button { font-family: inherit; }
 .admin-login-overlay {
     display: none; position: fixed; inset: 0; z-index: 400;
     background: rgba(0,0,0,0.7); align-items: center; justify-content: center;
-    animation: fadeIn 0.2s ease; backdrop-filter: blur(6px);
+    animation: fadeIn 0.2s ease;
+    -webkit-backdrop-filter: blur(6px);
+    backdrop-filter: blur(6px);
 }
 .admin-login-dialog {
     background: var(--bg-secondary); border: 1px solid var(--border);
