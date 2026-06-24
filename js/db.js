@@ -86,7 +86,7 @@ const DB = (() => {
     }
 
     async function fetchAndCache() {
-        const fresh = await batchFetch(500);
+        const fresh = await batchFetch(150);
         if (!fresh.length) return [];
         memCache = fresh;
         const hash = simpleHash(JSON.stringify(fresh));

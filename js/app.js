@@ -173,7 +173,7 @@ const App = (() => {
         }
 
         console.log('[Movies] 分批加载...');
-        cachedMovies = await moviesBatchFetch(500);
+        cachedMovies = await moviesBatchFetch(150);
         console.log('[Movies] 分批完成: ' + cachedMovies.length + ' 部');
         moviesIdbSet({ data: cachedMovies, _etag: moviesETag }).catch(() => {});
         return cachedMovies;
