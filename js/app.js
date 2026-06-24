@@ -137,20 +137,24 @@ const App = (() => {
 
         // 剩余批次后台并发加载
         (async () => {
-            const all = [...firstChunk];
-            const promises = [];
-            for (let i = batchSize; i < total; i += batchSize) {
-                promises.push(fetch('/api/movies?offset=' + i + '&limit=' + batchSize).then(r => r.json()));
+            try {
+                const all = [...firstChunk];
+                const promises = [];
+                for (let i = batchSize; i < total; i += batchSize) {
+                    promises.push(fetch('/api/movies?offset=' + i + '&limit=' + batchSize).then(r => r.json()));
+                }
+                const more = await Promise.all(promises);
+                for (const c of more) all.push(...c);
+                moviesETag = '';
+                cachedMovies = all;
+                movies = all;
+                moviesIdbSet({ data: all, _etag: '' }).catch(() => {});
+                rebuildSeries();
+                renderHome();
+                console.log('[Movies] 后台加载完成: ' + all.length + ' 部');
+            } catch (e) {
+                console.warn('[Movies] 后台批次加载失败，使用首批 ' + firstChunk.length + ' 部:', e.message);
             }
-            const more = await Promise.all(promises);
-            for (const c of more) all.push(...c);
-            moviesETag = '';
-            cachedMovies = all;
-            movies = all;
-            moviesIdbSet({ data: all, _etag: '' }).catch(() => {});
-            rebuildSeries();
-            renderHome();
-            console.log('[Movies] 后台加载完成: ' + all.length + ' 部');
         })();
 
         return firstChunk;
