@@ -154,9 +154,8 @@ const App = (() => {
                 cachedMovies = all;
                 movies = all;
                 moviesIdbSet({ data: all, _etag: '' }).catch(() => {});
-                rebuildSeries();
-                renderHome();
                 console.log('[Movies] 后台加载完成: ' + all.length + ' 部');
+                // 不立即刷新界面，等 metadata 到达后统一渲染，避免闪烁
             } catch (e) {
                 console.warn('[Movies] 后台批次加载失败，使用首批 ' + firstChunk.length + ' 部:', e.message);
             }
