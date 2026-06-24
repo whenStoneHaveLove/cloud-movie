@@ -232,13 +232,12 @@ button { font-family: inherit; }
 
 .card-poster {
     position: relative; aspect-ratio: 2/3;
+    overflow: hidden; background: var(--bg-hover);
 }
 /* Safari < 15 不支持 aspect-ratio，用 padding % 模拟 2:3 */
 @supports not (aspect-ratio: 1 / 1) {
     .card-poster { height: 0; padding-bottom: 150%; }
     .card-poster > * { position: absolute; top: 0; left: 0; width: 100%; height: 100%; }
-}
-    overflow: hidden; background: var(--bg-hover);
 }
 .card-poster img {
     width: 100%; height: 100%; object-fit: cover;
