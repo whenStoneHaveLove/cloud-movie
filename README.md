@@ -27,49 +27,127 @@
 
 ## 🚀 快速开始
 
-### 环境要求
+### 1. 安装环境
 
-- **Node.js** ≥ 14.x （纯内置模块，无需安装任何 npm 包）
+#### Node.js & npm（三选一）
 
-### 1. 克隆项目
+<details>
+<summary><b>Ubuntu / Debian</b></summary>
+
+```bash
+# 方式一：NodeSource 官方源（推荐，版本最新）
+curl -fsSL https://deb.nodesource.com/setup_22.x | sudo -E bash -
+sudo apt install -y nodejs
+
+# 方式二：系统自带（版本可能较旧）
+sudo apt update && sudo apt install -y nodejs npm
+
+# 验证
+node -v    # ≥ 14.x 即可
+npm -v
+```
+</details>
+
+<details>
+<summary><b>CentOS / RHEL / OpenCloudOS</b></summary>
+
+```bash
+# 方式一：NodeSource 官方源
+curl -fsSL https://rpm.nodesource.com/setup_22.x | sudo bash -
+sudo yum install -y nodejs
+
+# 方式二：dnf（Fedora / RHEL 8+）
+sudo dnf module install nodejs:22
+
+# 验证
+node -v
+npm -v
+```
+</details>
+
+<details>
+<summary><b>macOS</b></summary>
+
+```bash
+# Homebrew
+brew install node
+
+# 验证
+node -v
+npm -v
+```
+</details>
+
+> 💡 本项目零 npm 依赖，只需 Node.js 本体即可运行。
+
+#### Caddy（可选，需要域名时安装）
+
+<details>
+<summary><b>Ubuntu / Debian</b></summary>
+
+```bash
+sudo apt install -y debian-keyring debian-archive-keyring apt-transport-https
+curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/gpg.key' | sudo gpg --dearmor -o /usr/share/keyrings/caddy-stable-archive-keyring.gpg
+curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/debian.deb.txt' | sudo tee /etc/apt/sources.list.d/caddy-stable.list
+sudo apt update && sudo apt install -y caddy
+```
+</details>
+
+<details>
+<summary><b>CentOS / RHEL / OpenCloudOS</b></summary>
+
+```bash
+# Caddy 官方 COPR 仓库
+sudo yum install -y yum-plugin-copr
+sudo yum copr enable -y @caddy/caddy
+sudo yum install -y caddy
+```
+</details>
+
+<details>
+<summary><b>通用方式（任何 Linux）</b></summary>
+
+```bash
+# 下载二进制
+curl -L "https://caddyserver.com/api/download?os=linux&arch=amd64" -o caddy
+sudo mv caddy /usr/local/bin/
+sudo chmod +x /usr/local/bin/caddy
+
+# 验证
+caddy version
+```
+</details>
+
+### 2. 克隆项目 & 配置
 
 ```bash
 git clone https://github.com/whenStoneHaveLove/cloud-movie.git
 cd cloud-movie
-```
-
-### 2. 配置 TMDB API Key
-
-注册 [TMDB](https://www.themoviedb.org/signup) 账号，在 [API 设置](https://www.themoviedb.org/settings/api) 中申请密钥。
-
-```bash
-# 复制配置模板
 cp config.example.json config.json
-
-# 编辑 config.json，填入你的 TMDB Key 和密码
-nano config.json
+nano config.json   # 填入 TMDB Key 和管理员密码
 ```
 
 ```json
 {
-  "tmdb": {
-    "apiKey": "你的TMDB_API_KEY",
-    "mirrors": ["https://api.themoviedb.org/3", "https://api.tmdb.org/3"],
-    "timeout": 8000
-  },
-  "proxy": "127.0.0.1:10808",
-  "adminPassword": "admin123"
+    "port": 8081,
+    "tmdb": {
+        "apiKey": "请填入你的TMDB API KEY",
+        "mirrors": ["https://api.themoviedb.org", "https://api.tmdb.org"],
+        "timeout": 8000
+    },
+    "proxy": "",
+    "adminPassword": "请修改默认管理员密码"
 }
 ```
 
-| 配置项          | 说明                                                         |
-| --------------- | ------------------------------------------------------------ |
-| `port`          | 服务端口，默认 `8081`                                        |
-| `tmdb.apiKey`   | **必填**，TMDB API 密钥                                      |
-| `tmdb.mirrors`  | TMDB API 镜像地址，国内可修改为代理地址                      |
-| `tmdb.timeout`  | 请求超时时间（毫秒）                                         |
-| `proxy`         | 本地代理地址（v2rayN/Clash 等）；**留空不启用代理**（默认） |
-| `adminPassword` | 管理员登录密码                                               |
+| 配置项 | 说明 |
+|--------|------|
+| `port` | 服务端口，默认 `8081` |
+| `tmdb.apiKey` | **必填**，TMDB API 密钥 |
+| `tmdb.mirrors` | TMDB 镜像地址，国内服务器直连不通时可配代理 |
+| `tmdb.timeout` | 请求超时毫秒，默认 8000 |
+| `proxy` | 本地代理（如 `127.0.0.1:10808`），留空不启用 |
+| `adminPassword` | 管理员面板登录密码 |
 
 ### 3. 启动服务
 
@@ -77,56 +155,53 @@ nano config.json
 node server.js
 ```
 
-浏览器打开 `http://localhost:8081` 即可使用。
+浏览器打开 `http://localhost:8081`。
 
-> 💡 端口默认为 **8081**，可在 `config.json` 中修改 `port` 字段，或设置环境变量 `PORT`。
+> 💡 端口默认 **8081**，可在 `config.json` 中修改 `port` 字段。
 
-### 4. 服务器部署（后台运行）
-
-#### 方式一：PM2（推荐）
+### 4. 后台运行（PM2）
 
 ```bash
 # 安装 PM2
 npm install -g pm2
 
-# 启动（确保在项目目录下）
+# 启动
 pm2 start server.js --name cloud-movie
 
-# 设置开机自启
-pm2 save
-pm2 startup
+# 开机自启
+pm2 save && pm2 startup
+
+# 常用命令
+pm2 status              # 状态
+pm2 logs cloud-movie    # 日志
+pm2 restart cloud-movie # 重启
 ```
 
-管理命令：
+### 5. 配置 Caddy 反代（域名 + HTTPS）
+
+编辑 Caddyfile（位置根据安装方式不同）：
+- Ubuntu apt 安装：`/etc/caddy/Caddyfile`
+- 二进制安装：项目目录下创建 `Caddyfile`
+
+```caddy
+tv.your-domain.com {
+    reverse_proxy localhost:8081
+}
+```
+
+重载：
 
 ```bash
-pm2 status          # 查看运行状态
-pm2 logs cloud-movie # 查看日志
-pm2 restart cloud-movie  # 重启
+# systemd 安装
+sudo systemctl reload caddy
+
+# 二进制安装
+caddy reload --config /path/to/Caddyfile
 ```
 
-#### 方式二：nohup（轻量）
+Caddy 自动申请 Let's Encrypt 证书，访问 `https://tv.your-domain.com` 即可。
 
-```bash
-nohup node server.js > server.log 2>&1 &
-```
-
-#### 方式三：宝塔面板 / 1Panel
-
-在面板中创建 Node 项目，启动命令填 `node server.js`，端口设为 `8081`。
-
-### 5. 开放端口
-
-确保服务器防火墙/安全组放行 **8081** 端口（或你自定义的端口）：
-
-```bash
-# Linux (ufw)
-ufw allow 8081
-
-# 云服务器还需在控制台安全组中添加入站规则：TCP 8081
-```
-
-部署完成后，通过 `http://你的服务器IP:8081` 即可访问。如需域名，配置 Nginx/Caddy 反代即可。
+> 🚫 如果只用 IP 访问，不需要 Caddy，只需确保服务器安全组放行 **8081** 端口。
 
 ---
 
