@@ -134,6 +134,11 @@ const App = (() => {
         const firstChunk = await res.json();
         const total = parseInt(res.headers.get('X-Total-Count')) || firstChunk.length;
         if (total <= batchSize) { moviesETag = ''; return firstChunk; }
+        // 打乱首批顺序，避免全是同一类型（电影/电视剧混合展示）
+        for (let i = firstChunk.length - 1; i > 0; i--) {
+            const j = Math.floor(Math.random() * (i + 1));
+            [firstChunk[i], firstChunk[j]] = [firstChunk[j], firstChunk[i]];
+        }
 
         // 剩余批次后台并发加载
         (async () => {
