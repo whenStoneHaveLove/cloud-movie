@@ -80,10 +80,14 @@ const App = (() => {
     let moviesIdbReady = false;
     function openMoviesIdb() {
         return new Promise((resolve) => {
+            let settled = false;
+            const timeout = setTimeout(() => {
+                if (!settled) { settled = true; resolve(null); }
+            }, 3000);
             const req = indexedDB.open('CloudMovieMovies', 1);
             req.onupgradeneeded = () => { req.result.createObjectStore('movies'); };
-            req.onsuccess = () => { moviesIdbReady = true; resolve(req.result); };
-            req.onerror = () => resolve(null);
+            req.onsuccess = () => { if (!settled) { settled = true; clearTimeout(timeout); moviesIdbReady = true; resolve(req.result); } };
+            req.onerror = () => { if (!settled) { settled = true; clearTimeout(timeout); resolve(null); } };
         });
     }
     const moviesIdbPromise = openMoviesIdb();

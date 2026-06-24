@@ -11,13 +11,17 @@ const DB = (() => {
     const CACHE_STORE = 'metadata';
     let cacheReady = false;
 
-    // 打开 IndexedDB 缓存
+    // 打开 IndexedDB 缓存（iOS Safari 可能卡死，加超时兜底）
     function openCache() {
         return new Promise((resolve, reject) => {
+            let settled = false;
+            const timeout = setTimeout(() => {
+                if (!settled) { settled = true; reject(new Error('IDB timeout')); }
+            }, 3000);
             const req = indexedDB.open(CACHE_DB, 1);
             req.onupgradeneeded = () => { req.result.createObjectStore(CACHE_STORE); };
-            req.onsuccess = () => { cacheReady = true; resolve(req.result); };
-            req.onerror = () => reject(req.error);
+            req.onsuccess = () => { if (!settled) { settled = true; clearTimeout(timeout); cacheReady = true; resolve(req.result); } };
+            req.onerror = () => { if (!settled) { settled = true; clearTimeout(timeout); reject(req.error); } };
         });
     }
 
