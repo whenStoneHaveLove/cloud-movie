@@ -898,6 +898,21 @@ const App = (() => {
         if (concertItems.length > 0) {
             rows.push({ title: '演唱会', icon: 'fa-music', movies: concertItems, id: 'concert' });
         }
+        // 未刮削项：metadata 后台加载中，先按原始标签展示（首批 150 条常见场景）
+        if (unscraped.length > 0) {
+            const byType = {};
+            for (const m of unscraped) {
+                const tag = m.mediaType === 'tv' ? 'tv' : 'movie';
+                if (!byType[tag]) byType[tag] = [];
+                byType[tag].push(m);
+            }
+            if (byType.movie && byType.movie.length) {
+                rows.push({ title: '电影（加载中）', icon: 'fa-film', movies: byType.movie, id: 'unscraped-movies' });
+            }
+            if (byType.tv && byType.tv.length) {
+                rows.push({ title: '电视剧（加载中）', icon: 'fa-tv', movies: byType.tv, id: 'unscraped-tv' });
+            }
+        }
 
         return rows;
     }
