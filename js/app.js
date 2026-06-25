@@ -179,6 +179,8 @@ const App = (() => {
     // 将 image.tmdb.org 重写为服务端代理（国内 TMDB 图片被墙）
     function proxyImageUrl(url) {
         if (!url || !url.includes('image.tmdb.org')) return url;
+        // 本地开发环境跳过代理（浏览器可直连 TMDB）
+        if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') return url;
         return '/api/img?url=' + encodeURIComponent(url);
     }
 
