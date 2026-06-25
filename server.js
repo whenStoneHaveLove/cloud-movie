@@ -607,16 +607,22 @@ function serveStatic(req, res) {
         }
         // 对 JSON/JS/CSS/HTML/SVG 开启 gzip
         const compressible = /\.(json|js|css|html|svg)$/.test(ext);
+        // 缓存策略：HTML 每次验证，静态资源缓存 1 天
+        const cacheControl = ext === '.html' ? 'no-cache' : 'public, max-age=86400';
         if (canGzip && compressible && data.length > 1024) {
             const compressed = zlib.gzipSync(data);
             res.writeHead(200, {
                 'Content-Type': contentType,
                 'Content-Encoding': 'gzip',
                 'Content-Length': compressed.length,
+                'Cache-Control': cacheControl,
             });
             res.end(compressed);
         } else {
-            res.writeHead(200, { 'Content-Type': contentType });
+            res.writeHead(200, {
+                'Content-Type': contentType,
+                'Cache-Control': cacheControl,
+            });
             res.end(data);
         }
     });
