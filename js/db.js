@@ -86,34 +86,13 @@ const DB = (() => {
     }
 
     async function fetchAndCache() {
-        const fresh = await batchFetch(150);
-        if (!fresh.length) return [];
+        const fresh = await conditionalFetch(null);
+        if (!fresh) return [];
         memCache = fresh;
         const hash = simpleHash(JSON.stringify(fresh));
         const idbReady = await idbPromise;
         if (idbReady) setCache('all', { data: fresh, _hash: hash, _time: Date.now(), _etag: savedETag }).catch(() => {});
         return fresh;
-    }
-
-    // 分批加载（每批 500 条，多批次并发获取）
-    async function batchFetch(batchSize) {
-        const res = await fetch(API_BASE + '?offset=0&limit=' + batchSize);
-        const firstChunk = await res.json();
-        const total = parseInt(res.headers.get('X-Total-Count')) || firstChunk.length;
-        if (total <= batchSize) return firstChunk;
-
-        const all = [...firstChunk];
-        const promises = [];
-        for (let i = batchSize; i < total; i += batchSize) {
-            promises.push(
-                fetch(API_BASE + '?offset=' + i + '&limit=' + batchSize)
-                    .then(r => r.json())
-            );
-        }
-        const more = await Promise.all(promises);
-        for (const c of more) all.push(...c);
-        savedETag = '';  // 分批时 ETag 不适用
-        return all;
     }
 
     return {

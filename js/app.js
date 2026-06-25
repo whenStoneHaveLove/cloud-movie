@@ -33,26 +33,8 @@ const App = (() => {
     async function init() {
         applyTheme();
 
-        // Step 1: 先加载影片列表（movies.json 自带海报+标题，无需等 metadata）
+        // Load metadata from server（IndexedDB → data/metadata.json）
         try {
-            movies = await getImportedMovies();
-        } catch (e) {
-            console.error('Failed to load movies:', e);
-            movies = [];
-        }
-
-        // Step 2: 立即渲染（无 metadata 时用原始海报和标题）
-        rebuildSeries();
-        initGenres();
-        renderHome();
-        renderFavorites();
-        renderHistory();
-        renderScrapePanel();
-        checkTmdbConfig();
-
-        // Step 3: 后台静默加载数据，仅存入缓存不刷新界面
-        try {
-            // metadata 静默加载（评分等细节点击详情时即可显示）
             const allMeta = await DB.getAll();
             metadataMap = {};
             for (const m of allMeta) {
@@ -62,6 +44,22 @@ const App = (() => {
         } catch (e) {
             console.error('Failed to load metadata:', e);
         }
+
+        // Load movies from server（localStorage → data/movies.json）
+        try {
+            movies = await getImportedMovies();
+        } catch (e) {
+            console.error('Failed to load movies:', e);
+            movies = [];
+        }
+
+        rebuildSeries();
+        initGenres();
+        renderHome();
+        renderFavorites();
+        renderHistory();
+        renderScrapePanel();
+        checkTmdbConfig();
     }
 
     async function checkTmdbConfig() {
@@ -126,40 +124,6 @@ const App = (() => {
         return await res.json();
     }
 
-    // 分批加载 movies：第一批立即返回渲染，剩余后台加载后自动刷新
-    async function moviesBatchFetch(batchSize) {
-        const res = await fetch('/api/movies?offset=0&limit=' + batchSize);
-        const firstChunk = await res.json();
-        const total = parseInt(res.headers.get('X-Total-Count')) || firstChunk.length;
-        if (total <= batchSize) { moviesETag = ''; return firstChunk; }
-        // 打乱首批顺序，避免全是同一类型（电影/电视剧混合展示）
-        for (let i = firstChunk.length - 1; i > 0; i--) {
-            const j = Math.floor(Math.random() * (i + 1));
-            [firstChunk[i], firstChunk[j]] = [firstChunk[j], firstChunk[i]];
-        }
-
-        // 剩余批次后台并发加载（延迟 100ms 确保首批已绘制到屏幕）
-        setTimeout(async () => {
-            try {
-                const all = [...firstChunk];
-                const promises = [];
-                for (let i = batchSize; i < total; i += batchSize) {
-                    promises.push(fetch('/api/movies?offset=' + i + '&limit=' + batchSize).then(r => r.json()));
-                }
-                const more = await Promise.all(promises);
-                for (const c of more) all.push(...c);
-                moviesETag = '';
-                cachedMovies = all;
-                moviesIdbSet({ data: all, _etag: '' }).catch(() => {});
-                console.log('[Movies] 后台静默加载完成: ' + all.length + ' 部，界面保持不变');
-            } catch (e) {
-                console.warn('[Movies] 后台批次加载失败，使用首批 ' + firstChunk.length + ' 部:', e.message);
-            }
-        }, 100);
-
-        return firstChunk;
-    }
-
     async function getImportedMovies() {
         if (cachedMovies) return cachedMovies;
 
@@ -188,9 +152,9 @@ const App = (() => {
             moviesETag = null;
         }
 
-        console.log('[Movies] 分批加载...');
-        cachedMovies = await moviesBatchFetch(150);
-        console.log('[Movies] 分批完成: ' + cachedMovies.length + ' 部');
+        console.log('[Movies] 走网络加载...');
+        cachedMovies = await moviesConditionalFetch(null) || [];
+        console.log('[Movies] 网络加载: ' + cachedMovies.length + ' 部');
         moviesIdbSet({ data: cachedMovies, _etag: moviesETag }).catch(() => {});
         return cachedMovies;
     }
@@ -897,21 +861,6 @@ const App = (() => {
         }
         if (concertItems.length > 0) {
             rows.push({ title: '演唱会', icon: 'fa-music', movies: concertItems, id: 'concert' });
-        }
-        // 未刮削项：metadata 后台加载中，先按原始标签展示（首批 150 条常见场景）
-        if (unscraped.length > 0) {
-            const byType = {};
-            for (const m of unscraped) {
-                const tag = m.mediaType === 'tv' ? 'tv' : 'movie';
-                if (!byType[tag]) byType[tag] = [];
-                byType[tag].push(m);
-            }
-            if (byType.movie && byType.movie.length) {
-                rows.push({ title: '电影（加载中）', icon: 'fa-film', movies: byType.movie, id: 'unscraped-movies' });
-            }
-            if (byType.tv && byType.tv.length) {
-                rows.push({ title: '电视剧（加载中）', icon: 'fa-tv', movies: byType.tv, id: 'unscraped-tv' });
-            }
         }
 
         return rows;
