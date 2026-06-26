@@ -1110,12 +1110,9 @@ const App = (() => {
     }
 
     async function refreshAndPlay(enriched) {
-        // 显示加载中
-        showImportStatus('正在刷新播放链接...', 'loading');
         const freshUrl = await ShareParser.refreshDownloadUrl(
             enriched._linkID, enriched._passwd, enriched._fileId, enriched.folderPath
         );
-        clearImportStatus();
         if (freshUrl) {
             enriched.videoUrl = freshUrl;
             // 回写到 movies 数组和存储
@@ -1124,9 +1121,6 @@ const App = (() => {
                 movie.videoUrl = freshUrl;
                 saveImportedMovies(movies);
             }
-            console.log('[Player] 链接已刷新');
-        } else {
-            console.warn('[Player] 刷新链接失败，使用缓存链接');
         }
         doPlay(enriched);
     }

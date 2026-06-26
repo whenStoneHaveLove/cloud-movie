@@ -632,7 +632,6 @@ function proxyApi(req, res) {
     const parsedUrl = new URL(req.url, 'http://localhost');
     const defaultTarget = 'https://share-kd-njs.yun.139.com/yun-share/richlifeApp/devapp/IOutLink/getOutLinkInfoV6';
     const targetUrl = parsedUrl.searchParams.get('target') || defaultTarget;
-    const targetParsed = new URL(targetUrl);
 
     let responded = false;
 
@@ -654,21 +653,24 @@ function proxyApi(req, res) {
         const body = Buffer.concat(chunks);
         const clientContentType = req.headers['content-type'] || 'application/json;charset=UTF-8';
 
-        const headers = {
-            'Content-Type': clientContentType,
-            'Content-Length': body.length,
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136.0.0.0 Safari/537.36',
-            'Origin': 'https://yun.139.com',
-            'Referer': 'https://yun.139.com/shareweb/',
-            'Accept': 'application/json, text/plain, */*',
-            'Accept-Language': 'zh-CN,zh;q=0.9,en;q=0.8',
-            'Connection': 'keep-alive',
-            'x-yun-channel-source': 'web',
-            'x-yun-app-channel': 'web',
-        };
-
-        function handleResponse(proxyRes) {
+        const proxyReq = https.request(targetUrl, {
+            method: 'POST',
+            timeout: 15000,
+            headers: {
+                'Content-Type': clientContentType,
+                'Content-Length': body.length,
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136.0.0.0 Safari/537.36',
+                'Origin': 'https://yun.139.com',
+                'Referer': 'https://yun.139.com/shareweb/',
+                'Accept': 'application/json, text/plain, */*',
+                'Accept-Language': 'zh-CN,zh;q=0.9,en;q=0.8',
+                'Connection': 'keep-alive',
+                'x-yun-channel-source': 'web',
+                'x-yun-app-channel': 'web',
+            },
+        }, (proxyRes) => {
             if (responded) { proxyRes.resume(); return; }
+
             const resChunks = [];
             proxyRes.on('data', chunk => resChunks.push(chunk));
             proxyRes.on('error', (e) => {
@@ -679,6 +681,7 @@ function proxyApi(req, res) {
             proxyRes.on('end', () => {
                 const rawBuf = Buffer.concat(resChunks);
                 const encoding = proxyRes.headers['content-encoding'];
+
                 let finalBuf = rawBuf;
                 try {
                     if (encoding === 'gzip') finalBuf = zlib.gunzipSync(rawBuf);
@@ -686,7 +689,9 @@ function proxyApi(req, res) {
                     else if (encoding === 'br') finalBuf = zlib.brotliDecompressSync(rawBuf);
                 } catch (e) {
                     console.error('Decompression error:', e.message);
+                    // Fall through with raw buffer
                 }
+
                 const upstreamContentType = proxyRes.headers['content-type'] || 'application/json; charset=utf-8';
                 safeRespond(proxyRes.statusCode, {
                     'Content-Type': upstreamContentType,
@@ -695,64 +700,27 @@ function proxyApi(req, res) {
                     'Access-Control-Allow-Headers': 'Content-Type',
                 }, finalBuf);
             });
-        }
+        });
 
-        function onError(e) {
+        proxyReq.on('timeout', () => {
             if (!responded) {
-                console.error('Share API request error:', e.message);
+                console.warn('Share API proxy timeout -> destroying request');
+                proxyReq.destroy();
+                safeRespond(504, { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' },
+                    JSON.stringify({ error: '上游 API 请求超时 (15s)' }));
+            }
+        });
+
+        proxyReq.on('error', (e) => {
+            if (!responded) {
+                console.error('Proxy request error:', e.message);
                 safeRespond(502, { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' },
                     JSON.stringify({ error: e.message }));
             }
-        }
+        });
 
-        // 有本地代理 → 走 CONNECT 隧道
-        if (LOCAL_PROXY) {
-            createProxyTunnel(targetParsed.hostname, parseInt(targetParsed.port) || 443)
-                .then(tunnel => {
-                    const tlsSock = tls.connect({
-                        socket: tunnel,
-                        host: targetParsed.hostname,
-                        servername: targetParsed.hostname,
-                        rejectUnauthorized: false,
-                    });
-                    tlsSock.setTimeout(15000, () => { tlsSock.destroy(); onError(new Error('timeout')); });
-                    const reqLine = `POST ${targetParsed.pathname}${targetParsed.search} HTTP/1.1\r\n` +
-                        Object.entries(headers).map(([k, v]) => `${k}: ${v}`).join('\r\n') + '\r\n\r\n';
-                    tlsSock.write(reqLine);
-                    tlsSock.write(body);
-                    // 解析 HTTP 响应
-                    let respBuf = Buffer.alloc(0);
-                    let headerEnd = -1;
-                    tlsSock.on('data', chunk => {
-                        respBuf = Buffer.concat([respBuf, chunk]);
-                        if (headerEnd < 0) headerEnd = respBuf.indexOf('\r\n\r\n');
-                        if (headerEnd >= 0) {
-                            const headerStr = respBuf.slice(0, headerEnd).toString();
-                            const statusMatch = headerStr.match(/HTTP\/\S+\s+(\d+)/);
-                            const hdrObj = {};
-                            headerStr.split('\r\n').slice(1).forEach(line => {
-                                const ci = line.indexOf(':');
-                                if (ci > 0) hdrObj[line.slice(0, ci).toLowerCase()] = line.slice(ci + 1).trim();
-                            });
-                            const resBody = respBuf.slice(headerEnd + 4);
-                            const fakeRes = new (require('stream').Readable)({ read() { this.push(resBody); this.push(null); } });
-                            fakeRes.headers = hdrObj;
-                            fakeRes.statusCode = statusMatch ? parseInt(statusMatch[1]) : 502;
-                            fakeRes.resume = () => {};
-                            handleResponse(fakeRes);
-                        }
-                    });
-                    tlsSock.on('error', onError);
-                })
-                .catch(onError);
-        } else {
-            // 直连
-            const proxyReq = https.request(targetUrl, { method: 'POST', timeout: 15000, headers }, handleResponse);
-            proxyReq.on('timeout', () => { proxyReq.destroy(); onError(new Error('timeout')); });
-            proxyReq.on('error', onError);
-            proxyReq.write(body);
-            proxyReq.end();
-        }
+        proxyReq.write(body);
+        proxyReq.end();
         } catch (e) {
             console.error('proxyApi handler error:', e.message, e.stack);
             safeRespond(500, { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' },
