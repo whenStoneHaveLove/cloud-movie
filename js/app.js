@@ -1110,6 +1110,11 @@ const App = (() => {
     }
 
     async function refreshAndPlay(enriched) {
+        // 先打开播放器显示加载中
+        doPlay(enriched);
+        const playerLoading = document.getElementById('playerLoading');
+        if (playerLoading) playerLoading.innerHTML = '<i class="fas fa-spinner fa-spin"></i><span>正在刷新播放链接...</span>';
+
         const freshUrl = await ShareParser.refreshDownloadUrl(
             enriched._linkID, enriched._passwd, enriched._fileId, enriched.folderPath
         );
@@ -1121,8 +1126,18 @@ const App = (() => {
                 movie.videoUrl = freshUrl;
                 saveImportedMovies(movies);
             }
+            // 用新链接重新播放
+            Player.play(enriched);
+        } else {
+            // 刷新失败，显示重试提示
+            if (playerLoading) playerLoading.innerHTML = '<span style="color:#e74c3c">链接刷新失败</span> <button onclick="App.retryPlay(\'' + enriched.id + '\')" style="background:#e74c3c;color:#fff;border:none;padding:6px 16px;border-radius:4px;cursor:pointer;margin-left:8px">重试</button>';
         }
-        doPlay(enriched);
+    }
+
+    function retryPlay(id) {
+        const movie = movies.find(m => m.id === id);
+        if (!movie) return;
+        refreshAndPlay(enrichMovie(movie));
     }
 
     function doPlay(enriched) {
@@ -2502,5 +2517,7 @@ const App = (() => {
         smartImport, confirmSmartImport, cancelSmartImport,
         // Image proxy
         proxyImageUrl,
+        // Playback retry
+        retryPlay,
     };
 })();
