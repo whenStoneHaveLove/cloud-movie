@@ -1110,10 +1110,12 @@ const App = (() => {
     }
 
     async function refreshAndPlay(enriched) {
-        console.log('[Player] 正在刷新播放链接...');
+        // 显示加载中
+        showImportStatus('正在刷新播放链接...', 'loading');
         const freshUrl = await ShareParser.refreshDownloadUrl(
             enriched._linkID, enriched._passwd, enriched._fileId, enriched.folderPath
         );
+        clearImportStatus();
         if (freshUrl) {
             enriched.videoUrl = freshUrl;
             // 回写到 movies 数组和存储
