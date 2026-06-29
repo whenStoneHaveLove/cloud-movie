@@ -463,33 +463,43 @@ const ShareParser = (() => {
 
     /**
      * 刷新网盘视频下载链接（签名 URL 24小时过期）
-     * @param {string} linkID - 分享链接 ID
-     * @param {string} passwd - 提取码
-     * @param {string} fileId - 文件 coID
-     * @param {string} pCaID - 文件所在文件夹 caID
-     * @returns {string|null} 新的下载链接
+     * 递归搜索所有子文件夹直到找到目标文件
      */
     async function refreshDownloadUrl(linkID, passwd, fileId, pCaID) {
         if (!linkID || !fileId) return null;
-        try {
-            // 使用与导入相同的请求格式 buildPayload
-            const payload = buildPayload(linkID, passwd, pCaID || 'root', 1, 999);
-            const bodyStr = JSON.stringify(payload);
-            const resp = await fetch('/api/proxy?target=' + encodeURIComponent(API_URL), {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json; charset=UTF-8' },
-                body: bodyStr,
-            });
-            const data = await resp.json();
 
-            // 使用与 parseApiChildren 相同的解析方式：data.coLst
-            const items = data.coLst || [];
-            for (const item of items) {
-                if (item.coID === fileId) {
-                    return item.presentURL || item.cdnDownLoadUrl || null;
+        async function searchFolder(caId, depth) {
+            if (depth > 5) return null; // 最多5层
+            try {
+                const payload = buildPayload(linkID, passwd, caId, 1, 999);
+                const bodyStr = JSON.stringify(payload);
+                const resp = await fetch('/api/proxy?target=' + encodeURIComponent(API_URL), {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json; charset=UTF-8' },
+                    body: bodyStr,
+                });
+                const data = await resp.json();
+                const items = data.coLst || [];
+                // 先查当前文件夹
+                for (const item of items) {
+                    if (item.coID === fileId) {
+                        return item.presentURL || item.cdnDownLoadUrl || null;
+                    }
                 }
+                // 未找到，递归查子文件夹
+                const subFolders = data.caLst || [];
+                for (const f of subFolders) {
+                    const result = await searchFolder(f.caID, depth + 1);
+                    if (result) return result;
+                }
+                return null;
+            } catch (e) {
+                return null;
             }
-            return null;
+        }
+
+        try {
+            return await searchFolder(pCaID || 'root', 0);
         } catch (e) {
             console.warn('[Refresh] 刷新链接失败:', e.message);
             return null;
