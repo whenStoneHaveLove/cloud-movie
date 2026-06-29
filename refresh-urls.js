@@ -80,6 +80,9 @@ async function buildFileMap(linkID, passwd, caId, depth) {
     const files = data.coLst || [];
     const folders = data.caLst || [];
 
+    console.log(`  [${depth}] folder=${caId} files=${files.length} folders=${folders.length}` +
+        (files.length > 0 ? ` sampleId=${files[0].coID} url=${String(files[0].presentURL || files[0].cdnDownLoadUrl || '(empty)').substring(0, 60)}` : ''));
+
     for (const f of files) {
         if (f.coID) {
             map[f.coID] = f.presentURL || f.cdnDownLoadUrl || '';
@@ -115,18 +118,28 @@ async function refreshAllUrls(moviesPath) {
     console.log(`[Refresh] ${groupEntries.length} 个分享链接，共 ${movies.filter(m => m._linkID && m.videoUrl && m.videoUrl.includes('mcloud.139.com')).length} 部影片`);
 
     let updated = 0;
+    let totalMatched = 0;
+    let totalNotFound = 0;
     for (const [key, g] of groupEntries) {
         console.log(`[Refresh] 处理 ${g.movies.length} 部影片, linkID=${g.linkID}`);
         try {
             const fileMap = await buildFileMap(g.linkID, g.passwd, 'root', 0);
+            console.log(`  共 ${Object.keys(fileMap).length} 个文件映射`);
             for (const m of g.movies) {
                 const freshUrl = fileMap[m._fileId];
-                if (freshUrl && freshUrl !== m.videoUrl) {
-                    console.log(`  更新: ${m.title}`);
-                    m.videoUrl = freshUrl;
-                    updated++;
+                if (freshUrl) {
+                    totalMatched++;
+                    if (freshUrl !== m.videoUrl) {
+                        console.log(`  更新: ${m.title}`);
+                        m.videoUrl = freshUrl;
+                        updated++;
+                    }
+                } else {
+                    totalNotFound++;
+                    if (totalNotFound <= 3) console.log(`  未找到: ${m.title} fileId=${m._fileId}`);
                 }
             }
+            console.log(`  匹配: ${totalMatched} / 未找到: ${totalNotFound} / 更新了: ${updated}`);
         } catch (e) {
             console.error(`[Refresh] 失败: ${key}`, e.message);
         }
