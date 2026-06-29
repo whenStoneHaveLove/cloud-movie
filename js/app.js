@@ -1116,7 +1116,7 @@ const App = (() => {
         if (playerLoading) playerLoading.innerHTML = '<i class="fas fa-spinner fa-spin"></i><span>正在刷新播放链接...</span>';
 
         const freshUrl = await ShareParser.refreshDownloadUrl(
-            enriched._linkID, enriched._passwd, enriched._fileId, enriched.folderPath
+            enriched._linkID, enriched._passwd, enriched._fileId, enriched._parentCaId || 'root'
         );
         if (freshUrl) {
             enriched.videoUrl = freshUrl;
@@ -1834,6 +1834,7 @@ const App = (() => {
                             _linkID: shareData.linkID || null,
                             _passwd: shareData.passwd || null,
                             _fileId: file.fileId || null,
+                            _parentCaId: file.parentCaId || 'root',
                         };
 
                         existing.push(movie);
