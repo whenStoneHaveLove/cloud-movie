@@ -917,6 +917,10 @@ const server = http.createServer(async (req, res) => {
         proxyApi(req, res);
     } else if (req.url.startsWith('/api/tmdb')) {
         proxyTmdb(req, res);
+    } else if (req.url === '/api/refresh') {
+        const { refreshAllUrls } = require('./refresh-urls.js');
+        refreshAllUrls().then(n => sendJSON(res, 200, { ok: true, updated: n }))
+            .catch(e => sendJSON(res, 500, { error: e.message }));
     } else if (req.url === '/api/config') {
         configStatus(req, res);
     } else if (req.url.startsWith('/api/img')) {
@@ -945,7 +949,25 @@ process.on('unhandledRejection', (reason) => {
     console.error(reason);
 });
 
+// 定期刷新播放链接（网盘签名 URL 24h 过期）
+let refreshTimer = null;
+function startRefreshTask() {
+    const refreshScript = require('./refresh-urls.js').refreshAllUrls;
+    const run = () => {
+        console.log('[RefreshTask] 开始刷新播放链接...');
+        refreshScript().then(updated => {
+            console.log(`[RefreshTask] 完成，更新了 ${updated} 个链接`);
+        }).catch(e => {
+            console.error('[RefreshTask] 失败:', e.message);
+        });
+    };
+    // 启动 30 秒后首次执行，之后每 24 小时执行
+    setTimeout(run, 30000);
+    refreshTimer = setInterval(run, 24 * 60 * 60 * 1000);
+}
+
 server.listen(PORT, () => {
+    startRefreshTask();
     console.log(`云盘影院服务器已启动: http://localhost:${PORT}`);
     console.log(`TMDB API Key: ${TMDB_API_KEY ? '已配置 ✓' : '未配置 ✗ (请在 config.json 中添加 apiKey)'}`);
     console.log(`本地代理: ${LOCAL_PROXY || '未配置（TMDB将直连，国内服务器建议配置代理）'}`);
