@@ -470,31 +470,21 @@ const ShareParser = (() => {
     async function refreshDownloadUrl(linkID, passwd, fileId, folderPath) {
         if (!linkID || !fileId) return null;
         try {
-            const body = JSON.stringify({
-                linkID,
-                passwd: passwd || '',
-                bNum: 0,
-                eNum: 999,  // 大页码，确保覆盖所有文件
-                path: folderPath || '',
-                v: '2.0',
-            });
-            const resp = await fetch('/api/proxy', {
+            // 使用与导入相同的请求格式 buildPayload
+            const payload = buildPayload(linkID, passwd, folderPath || 'root', 1, 999);
+            const bodyStr = JSON.stringify(payload);
+            const resp = await fetch('/api/proxy?target=' + encodeURIComponent(API_URL), {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body,
+                headers: { 'Content-Type': 'application/json; charset=UTF-8' },
+                body: bodyStr,
             });
             const data = await resp.json();
-            if (!data || data.code !== '0') return null;
 
-            // 遍历找到目标文件
-            let items = [];
-            if (data.data?.fileInfos) items = data.data.fileInfos;
-            else if (data.data?.list) items = data.data.list;
-            else if (Array.isArray(data.data)) items = data.data;
-
+            // 使用与 parseApiChildren 相同的解析方式：data.coLst
+            const items = data.coLst || [];
             for (const item of items) {
-                if (item.coID === fileId || item.fileId === fileId) {
-                    return item.downloadUrl || item.presentURL || item.cdnDownLoadUrl || null;
+                if (item.coID === fileId) {
+                    return item.presentURL || item.cdnDownLoadUrl || null;
                 }
             }
             return null;
