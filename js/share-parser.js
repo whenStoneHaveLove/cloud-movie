@@ -339,7 +339,7 @@ const ShareParser = (() => {
     async function collectSelectedFiles(roots, checkedSet, linkID, passwd) {
         const files = [];
 
-        async function collect(nodes, parentChecked, folderPath, parentCaId) {
+        async function collect(nodes, parentChecked, folderPath) {
             for (const node of nodes) {
                 const isNodeChecked = checkedSet.has(node.path);
                 const ancestorChecked = parentChecked;
@@ -356,11 +356,11 @@ const ShareParser = (() => {
                             );
                             node.childrenLoaded = true;
                         }
-                        await collect(node.children, true, subPath, node.id);
+                        await collect(node.children, true, subPath);
                     } else {
                         // Only recurse into children that are individually checked
                         if (node.childrenLoaded && node.children) {
-                            await collect(node.children, false, subPath, node.id);
+                            await collect(node.children, false, subPath);
                         }
                     }
                 } else if (node.type === 'file') {
@@ -373,7 +373,6 @@ const ShareParser = (() => {
                             downloadUrl: node.downloadUrl,
                             thumbUrl: node.thumbUrl,
                             folderPath: folderPath || '',
-                            parentCaId: parentCaId || 'root',
                             isDir: false,
                         });
                     }
@@ -381,7 +380,7 @@ const ShareParser = (() => {
             }
         }
 
-        await collect(roots, false, '', 'root');
+        await collect(roots, false, '');
         return files;
     }
 
@@ -408,7 +407,7 @@ const ShareParser = (() => {
             }
         }
 
-        async function traverse(nodes, folderPath, parentCaId) {
+        async function traverse(nodes, folderPath) {
             // 先并行加载所有子文件夹
             const folders = nodes.filter(n => n.type === 'folder');
             if (folders.length > 0) {
@@ -421,7 +420,7 @@ const ShareParser = (() => {
                     scanned++;
                     if (!node.children || node.children.length === 0) continue;
                     const subPath = folderPath ? folderPath + ' / ' + node.name : node.name;
-                    await traverse(node.children, subPath, node.id);
+                    await traverse(node.children, subPath);
                 } else if (node.type === 'file' && isVideoFile(node.name)) {
                     scanned++;
                     found++;
@@ -433,7 +432,6 @@ const ShareParser = (() => {
                         downloadUrl: node.downloadUrl,
                         thumbUrl: node.thumbUrl,
                         folderPath: folderPath || '',
-                        parentCaId: parentCaId || 'root',
                         isDir: false,
                     });
 
@@ -448,7 +446,7 @@ const ShareParser = (() => {
             }
         }
 
-        await traverse(roots, '', 'root');
+        await traverse(roots, '');
         const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
         console.log('[Scan] 完成: ' + found + ' 个视频文件, 扫描 ' + scanned + ' 个节点, 耗时 ' + elapsed + 's');
         if (onProgress) onProgress({ scanned, found, currentFolder: '完成' });
@@ -466,14 +464,14 @@ const ShareParser = (() => {
      * @param {string} linkID - 分享链接 ID
      * @param {string} passwd - 提取码
      * @param {string} fileId - 文件 coID
-     * @param {string} pCaID - 文件所在文件夹 caID
+     * @param {string} folderPath - 文件所在文件夹路径
      * @returns {string|null} 新的下载链接
      */
-    async function refreshDownloadUrl(linkID, passwd, fileId, pCaID) {
+    async function refreshDownloadUrl(linkID, passwd, fileId, folderPath) {
         if (!linkID || !fileId) return null;
         try {
             // 使用与导入相同的请求格式 buildPayload
-            const payload = buildPayload(linkID, passwd, pCaID || 'root', 1, 999);
+            const payload = buildPayload(linkID, passwd, folderPath || 'root', 1, 999);
             const bodyStr = JSON.stringify(payload);
             const resp = await fetch('/api/proxy?target=' + encodeURIComponent(API_URL), {
                 method: 'POST',
