@@ -34,7 +34,6 @@ function postApi(body) {
                 'x-yun-app-channel': 'web',
             },
         }, (res) => {
-            console.log('[API] HTTP ' + res.statusCode + ' ' + (res.headers['content-type'] || ''));
             const chunks = [];
             res.on('data', c => chunks.push(c));
             res.on('end', () => {
@@ -82,9 +81,6 @@ async function fetchAllFiles(linkID, passwd, caId) {
         const data = await postApi(payload);
         // 响应格式：{ resultCode, desc, data: { coLst, caLst }, success, code }
         const inner = data.data || data;
-        if (bNum === 1) {
-            console.log(`[API] page1 coLst=${(inner.coLst||[]).length} caLst=${(inner.caLst||[]).length}`);
-        }
         const files = inner.coLst || [];
         const folders = bNum === 1 ? (inner.caLst || []) : []; // 只取第一页的文件夹
 
@@ -106,7 +102,7 @@ async function buildFileMap(linkID, passwd, caId, depth) {
     const folders = data.caLst || [];
 
     console.log(`  [${depth}] folder=${caId} files=${files.length} folders=${folders.length}` +
-        (files.length > 0 ? ` sampleId=${files[0].coID} url=${String(files[0].presentURL || files[0].cdnDownLoadUrl || '(empty)').substring(0, 60)}` : ''));
+        (files.length > 0 ? ` sampleId=${files[0].coID} hasURL=${!!(files[0].presentURL || files[0].cdnDownLoadUrl)}` : ''));
 
     for (const f of files) {
         if (f.coID) {
