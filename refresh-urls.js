@@ -80,14 +80,13 @@ async function fetchAllFiles(linkID, passwd, caId) {
             }
         };
         const data = await postApi(payload);
+        // 响应格式：{ resultCode, desc, data: { coLst, caLst }, success, code }
+        const inner = data.data || data;
         if (bNum === 1) {
-            // 诊断日志：看 API 返回了什么
-            const keys = Object.keys(data);
-            console.log(`[API] page1 keys=[${keys.join(',')}] coLst=${(data.coLst||[]).length} caLst=${(data.caLst||[]).length}`);
-            if (keys.length <= 3) console.log('[API] full response:', JSON.stringify(data).substring(0, 300));
+            console.log(`[API] page1 coLst=${(inner.coLst||[]).length} caLst=${(inner.caLst||[]).length}`);
         }
-        const files = data.coLst || [];
-        const folders = bNum === 1 ? (data.caLst || []) : []; // 只取第一页的文件夹
+        const files = inner.coLst || [];
+        const folders = bNum === 1 ? (inner.caLst || []) : []; // 只取第一页的文件夹
 
         allFiles.push(...files);
         if (bNum === 1) allFolders.push(...folders);
