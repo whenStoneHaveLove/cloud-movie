@@ -34,6 +34,7 @@ function postApi(body) {
                 'x-yun-app-channel': 'web',
             },
         }, (res) => {
+            console.log('[API] HTTP ' + res.statusCode + ' ' + (res.headers['content-type'] || ''));
             const chunks = [];
             res.on('data', c => chunks.push(c));
             res.on('end', () => {
@@ -56,27 +57,52 @@ function postApi(body) {
     });
 }
 
-async function fetchFolderContents(linkID, passwd, caId) {
-    const payload = {
-        getOutLinkInfoReq: {
-            account: '',
-            linkID: linkID,
-            passwd: passwd || '',
-            caSrt: 0,
-            coSrt: 0,
-            srtDr: 1,
-            bNum: 1,
-            pCaID: caId || 'root',
-            eNum: 5000,
+// 获取一个文件夹的全部内容（自动翻页，和导入时的 fetchAllCatalog 一致）
+async function fetchAllFiles(linkID, passwd, caId) {
+    const allFiles = [];
+    const allFolders = [];
+    let bNum = 1;
+    const PAGE_SIZE = 200;
+    let maxPages = 50;
+
+    while (maxPages-- > 0) {
+        const payload = {
+            getOutLinkInfoReq: {
+                account: '',
+                linkID: linkID,
+                passwd: passwd || '',
+                caSrt: 0,
+                coSrt: 0,
+                srtDr: 1,
+                bNum: bNum,
+                pCaID: caId || 'root',
+                eNum: bNum + PAGE_SIZE - 1,
+            }
+        };
+        const data = await postApi(payload);
+        if (bNum === 1) {
+            // 诊断日志：看 API 返回了什么
+            const keys = Object.keys(data);
+            console.log(`[API] page1 keys=[${keys.join(',')}] coLst=${(data.coLst||[]).length} caLst=${(data.caLst||[]).length}`);
+            if (keys.length <= 3) console.log('[API] full response:', JSON.stringify(data).substring(0, 300));
         }
-    };
-    return await postApi(payload);
+        const files = data.coLst || [];
+        const folders = bNum === 1 ? (data.caLst || []) : []; // 只取第一页的文件夹
+
+        allFiles.push(...files);
+        if (bNum === 1) allFolders.push(...folders);
+
+        // 如果返回数量不足一页，说明已到末尾
+        if (files.length < PAGE_SIZE) break;
+        bNum += PAGE_SIZE;
+    }
+    return { coLst: allFiles, caLst: allFolders };
 }
 
 async function buildFileMap(linkID, passwd, caId, depth) {
     if (depth > 5) return {};
     const map = {};
-    const data = await fetchFolderContents(linkID, passwd, caId);
+    const data = await fetchAllFiles(linkID, passwd, caId);
     const files = data.coLst || [];
     const folders = data.caLst || [];
 
