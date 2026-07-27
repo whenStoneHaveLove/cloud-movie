@@ -1,3 +1,18 @@
+// 统一给日志加时间戳（本地时间），方便排查
+const _logTs = (() => {
+    const p = (n) => String(n).padStart(2, '0');
+    return () => {
+        const d = new Date();
+        return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`;
+    };
+})();
+const _origLog = console.log.bind(console);
+const _origErr = console.error.bind(console);
+const _origWarn = console.warn.bind(console);
+console.log = (...a) => _origLog(`[${_logTs()}]`, ...a);
+console.error = (...a) => _origErr(`[${_logTs()}]`, ...a);
+console.warn = (...a) => _origWarn(`[${_logTs()}]`, ...a);
+
 const http = require('http');
 const https = require('https');
 const tls = require('tls');
