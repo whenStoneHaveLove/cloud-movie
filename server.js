@@ -5,7 +5,6 @@ const net = require('net');
 const fs = require('fs');
 const path = require('path');
 const zlib = require('zlib');
-const { refreshAllUrls, refreshSingleUrl, startRefreshTask } = require('./refresh-urls.js');
 
 // Load config (必须在 PORT 之前)
 let CONFIG = {};
@@ -918,12 +917,9 @@ const server = http.createServer(async (req, res) => {
         proxyApi(req, res);
     } else if (req.url.startsWith('/api/tmdb')) {
         proxyTmdb(req, res);
-    } else if (req.url === '/api/refresh') {
-        // 手动批量刷新所有影片的 videoUrl（兜底）
-        refreshAllUrls().then(n => sendJSON(res, 200, { ok: true, updated: n }))
-            .catch(e => sendJSON(res, 500, { error: e.message }));
     } else if (req.url === '/api/refresh-url' && req.method === 'POST') {
         // 播放时按需刷新单个文件链接；失败一律返回 url:null，前端回退到已存链接
+        const { refreshSingleUrl } = require('./refresh-urls.js');
         readBody(req)
             .then(body => refreshSingleUrl(body && body.linkID, body && body.passwd, body && body.fileId, body && body.folderId))
             .then(url => sendJSON(res, 200, { ok: true, url: url || null }))
@@ -956,13 +952,11 @@ process.on('unhandledRejection', (reason) => {
     console.error(reason);
 });
 
-// 播放链接策略：
-//   - 点播时由客户端调 /api/refresh-url，按 _linkID + _folderId + _fileId 精准取最新签名 URL；
-//   - 同时启动 24h 定时任务刷新所有 videoUrl 作为兜底，保证刷新接口偶发失败仍可播放。
+// 播放链接改为「按需实时刷新」：点播时由客户端调 /api/refresh-url，
+// 按 _linkID + _folderId + _fileId 精准列出所在文件夹取最新签名 URL，无需定时任务。
 
 server.listen(PORT, () => {
     console.log(`云盘影院服务器已启动: http://localhost:${PORT}`);
-    startRefreshTask();
     console.log(`TMDB API Key: ${TMDB_API_KEY ? '已配置 ✓' : '未配置 ✗ (请在 config.json 中添加 apiKey)'}`);
     console.log(`本地代理: ${LOCAL_PROXY || '未配置（TMDB将直连，国内服务器建议配置代理）'}`);
     console.log(`TMDB 镜像: ${TMDB_MIRRORS.join(', ')}`);

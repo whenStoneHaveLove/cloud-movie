@@ -1117,7 +1117,7 @@ const App = (() => {
 
         const enriched = enrichMovie(movie);
 
-        // 云端视频（139 网盘）：点播时实时走接口获取最新签名链接（失败回退已存 videoUrl）
+        // 云端视频（139 网盘）：不再存储 videoUrl，点播时实时走接口获取最新签名链接
         if (enriched._linkID && enriched._fileId) {
             refreshAndPlay(enriched);
             return;
@@ -1127,18 +1127,15 @@ const App = (() => {
     }
 
     async function refreshAndPlay(enriched) {
-        // 点播时实时走接口获取最新签名链接；成功则更新并回写存储，失败回退到已存储 videoUrl
+        // 不再存储 videoUrl：点播时实时走接口获取最新签名链接，拿到后再播放
         const freshUrl = await ShareParser.refreshDownloadUrl(
             enriched._linkID, enriched._passwd, enriched._fileId, enriched._folderId
         );
-        if (freshUrl) {
-            enriched.videoUrl = freshUrl;
-            const movie = movies.find(m => m.id === enriched.id);
-            if (movie) {
-                movie.videoUrl = freshUrl;
-                saveImportedMovies(movies);
-            }
+        if (!freshUrl) {
+            showToast('播放链接获取失败，请稍后重试');
+            return;
         }
+        enriched.videoUrl = freshUrl; // 仅本次播放使用，不写回存储
         doPlay(enriched);
     }
 
@@ -1831,7 +1828,6 @@ const App = (() => {
                             desc: '', genre: '导入',
                             year: new Date().getFullYear(),
                             rating: null, duration: null,
-                            videoUrl: file.downloadUrl || file.fileId,
                             fileSize: file.size,
                             fileSizeText: file.sizeText,
                             folderPath: file.folderPath || '',
@@ -1977,7 +1973,6 @@ const App = (() => {
                     desc: '', genre: '导入',
                     year: new Date().getFullYear(),
                     rating: null, duration: null,
-                    videoUrl: file.downloadUrl || file.fileId,
                     fileSize: file.size,
                     fileSizeText: file.sizeText,
                     folderPath: file.folderPath || '',

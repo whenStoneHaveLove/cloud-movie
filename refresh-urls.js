@@ -1,11 +1,9 @@
 /**
- * 播放链接刷新（网盘签名 URL 24h 过期）
- *   - refreshAllUrls / startRefreshTask：定时批量刷新所有影片的 videoUrl（兜底）
- *   - refreshSingleUrl：点播时按需精准刷新单个文件链接（无需遍历整目录）
+ * 按需刷新单个文件的播放链接（网盘签名 URL 24h 过期）
+ *
+ * 仅在点播时由前端调用 /api/refresh-url，不再存储 videoUrl，也不再批量刷新。
  */
-const fs = require('fs');
 const https = require('https');
-const path = require('path');
 const zlib = require('zlib');
 
 const API_URL = 'https://share-kd-njs.yun.139.com/yun-share/richlifeApp/devapp/IOutLink/getOutLinkInfoV6';
@@ -142,55 +140,4 @@ async function refreshSingleUrl(linkID, passwd, fileId, folderId) {
     }
 }
 
-/**
- * 定时批量刷新所有影片的播放链接，写入各自 videoUrl（兜底，保证刷新接口偶发失败仍可播放）
- * @returns {number} 更新了多少个链接
- */
-async function refreshAllUrls(moviesPath) {
-    const filePath = moviesPath || path.join(__dirname, 'data', 'movies.json');
-    const movies = JSON.parse(fs.readFileSync(filePath, 'utf8'));
-
-    const groups = {};
-    for (const m of movies) {
-        if (!m._linkID || !m._fileId) continue;
-        if (!m.videoUrl || !m.videoUrl.includes('mcloud.139.com')) continue;
-        const key = m._linkID + '|' + (m._passwd || '');
-        if (!groups[key]) groups[key] = { linkID: m._linkID, passwd: m._passwd, movies: [] };
-        groups[key].movies.push(m);
-    }
-
-    let updated = 0;
-    for (const [key, g] of Object.entries(groups)) {
-        try {
-            const fileMap = await buildFileMap(g.linkID, g.passwd, 'root', 0);
-            for (const m of g.movies) {
-                const freshUrl = fileMap[m._fileId];
-                if (freshUrl && freshUrl !== m.videoUrl) {
-                    m.videoUrl = freshUrl;
-                    updated++;
-                }
-            }
-        } catch (e) {
-            console.error(`[Refresh] 失败: ${key}`, e.message);
-        }
-    }
-
-    fs.writeFileSync(filePath, JSON.stringify(movies, null, 2), 'utf8');
-    console.log(`[Refresh] 完成，更新了 ${updated} 个链接`);
-    return updated;
-}
-
-function startRefreshTask() {
-    const TWENTY_FOUR_HOURS = 24 * 60 * 60 * 1000;
-    setInterval(() => {
-        refreshAllUrls().catch(e => console.error('[Refresh] 定时刷新失败:', e.message));
-    }, TWENTY_FOUR_HOURS);
-    console.log('[Refresh] 已启动 24h 定时刷新任务');
-}
-
-// 直接运行时执行（node refresh-urls.js）
-if (require.main === module) {
-    refreshAllUrls().catch(e => { console.error(e); process.exit(1); });
-}
-
-module.exports = { refreshAllUrls, refreshSingleUrl, startRefreshTask };
+module.exports = { refreshSingleUrl };
