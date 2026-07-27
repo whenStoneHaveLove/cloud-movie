@@ -339,7 +339,7 @@ const ShareParser = (() => {
     async function collectSelectedFiles(roots, checkedSet, linkID, passwd) {
         const files = [];
 
-        async function collect(nodes, parentChecked, folderPath) {
+        async function collect(nodes, parentChecked, folderPath, folderId) {
             for (const node of nodes) {
                 const isNodeChecked = checkedSet.has(node.path);
                 const ancestorChecked = parentChecked;
@@ -356,11 +356,11 @@ const ShareParser = (() => {
                             );
                             node.childrenLoaded = true;
                         }
-                        await collect(node.children, true, subPath);
+                        await collect(node.children, true, subPath, node.id);
                     } else {
                         // Only recurse into children that are individually checked
                         if (node.childrenLoaded && node.children) {
-                            await collect(node.children, false, subPath);
+                            await collect(node.children, false, subPath, node.id);
                         }
                     }
                 } else if (node.type === 'file') {
@@ -373,6 +373,7 @@ const ShareParser = (() => {
                             downloadUrl: node.downloadUrl,
                             thumbUrl: node.thumbUrl,
                             folderPath: folderPath || '',
+                            folderId: folderId || null,
                             isDir: false,
                         });
                     }
@@ -380,7 +381,7 @@ const ShareParser = (() => {
             }
         }
 
-        await collect(roots, false, '');
+        await collect(roots, false, '', 'root');
         return files;
     }
 
@@ -407,7 +408,7 @@ const ShareParser = (() => {
             }
         }
 
-        async function traverse(nodes, folderPath) {
+        async function traverse(nodes, folderPath, folderId) {
             // 先并行加载所有子文件夹
             const folders = nodes.filter(n => n.type === 'folder');
             if (folders.length > 0) {
@@ -420,7 +421,7 @@ const ShareParser = (() => {
                     scanned++;
                     if (!node.children || node.children.length === 0) continue;
                     const subPath = folderPath ? folderPath + ' / ' + node.name : node.name;
-                    await traverse(node.children, subPath);
+                    await traverse(node.children, subPath, node.id);
                 } else if (node.type === 'file' && isVideoFile(node.name)) {
                     scanned++;
                     found++;
@@ -432,6 +433,7 @@ const ShareParser = (() => {
                         downloadUrl: node.downloadUrl,
                         thumbUrl: node.thumbUrl,
                         folderPath: folderPath || '',
+                        folderId: folderId || null,
                         isDir: false,
                     });
 
@@ -446,7 +448,7 @@ const ShareParser = (() => {
             }
         }
 
-        await traverse(roots, '');
+        await traverse(roots, '', 'root');
         const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
         console.log('[Scan] 完成: ' + found + ' 个视频文件, 扫描 ' + scanned + ' 个节点, 耗时 ' + elapsed + 's');
         if (onProgress) onProgress({ scanned, found, currentFolder: '完成' });
@@ -467,36 +469,19 @@ const ShareParser = (() => {
      * @param {string} folderPath - 文件所在文件夹路径
      * @returns {string|null} 新的下载链接
      */
-    async function refreshDownloadUrl(linkID, passwd, fileId, folderPath) {
+    async function refreshDownloadUrl(linkID, passwd, fileId, folderId) {
         if (!linkID || !fileId) return null;
         try {
-            const body = JSON.stringify({
-                linkID,
-                passwd: passwd || '',
-                bNum: 0,
-                eNum: 999,  // 大页码，确保覆盖所有文件
-                path: folderPath || '',
-                v: '2.0',
-            });
-            const resp = await fetch('/api/proxy', {
+            // 走服务端 /api/refresh-url：服务端按 coID + 文件夹 caID 精准列出所在文件夹取最新签名 URL，
+            // 没有 folderId（旧数据）时兜底遍历整棵目录。之前直接拼装的错误请求体（缺 getOutLinkInfoReq 包裹、
+            // 用 path 而非 pCaID、读 fileInfos/list 字段）永远拿不到链接，导致始终回退到过期 URL。
+            const resp = await fetch('/api/refresh-url', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body,
+                body: JSON.stringify({ linkID, passwd: passwd || '', fileId, folderId: folderId || null }),
             });
             const data = await resp.json();
-            if (!data || data.code !== '0') return null;
-
-            // 遍历找到目标文件
-            let items = [];
-            if (data.data?.fileInfos) items = data.data.fileInfos;
-            else if (data.data?.list) items = data.data.list;
-            else if (Array.isArray(data.data)) items = data.data;
-
-            for (const item of items) {
-                if (item.coID === fileId || item.fileId === fileId) {
-                    return item.downloadUrl || item.presentURL || item.cdnDownLoadUrl || null;
-                }
-            }
+            if (data && data.url) return data.url;
             return null;
         } catch (e) {
             console.warn('[Refresh] 刷新链接失败:', e.message);

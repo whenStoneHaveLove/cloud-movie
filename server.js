@@ -5,6 +5,7 @@ const net = require('net');
 const fs = require('fs');
 const path = require('path');
 const zlib = require('zlib');
+const { refreshAllUrls, refreshSingleUrl, startRefreshTask } = require('./refresh-urls.js');
 
 // Load config (必须在 PORT 之前)
 let CONFIG = {};
@@ -918,9 +919,15 @@ const server = http.createServer(async (req, res) => {
     } else if (req.url.startsWith('/api/tmdb')) {
         proxyTmdb(req, res);
     } else if (req.url === '/api/refresh') {
-        const { refreshAllUrls } = require('./refresh-urls.js');
+        // 手动批量刷新所有影片的 videoUrl（兜底）
         refreshAllUrls().then(n => sendJSON(res, 200, { ok: true, updated: n }))
             .catch(e => sendJSON(res, 500, { error: e.message }));
+    } else if (req.url === '/api/refresh-url' && req.method === 'POST') {
+        // 播放时按需刷新单个文件链接；失败一律返回 url:null，前端回退到已存链接
+        readBody(req)
+            .then(body => refreshSingleUrl(body && body.linkID, body && body.passwd, body && body.fileId, body && body.folderId))
+            .then(url => sendJSON(res, 200, { ok: true, url: url || null }))
+            .catch(e => sendJSON(res, 200, { ok: true, url: null, error: e.message }));
     } else if (req.url === '/api/config') {
         configStatus(req, res);
     } else if (req.url.startsWith('/api/img')) {
@@ -949,26 +956,13 @@ process.on('unhandledRejection', (reason) => {
     console.error(reason);
 });
 
-// 定期刷新播放链接（网盘签名 URL 24h 过期）
-let refreshTimer = null;
-function startRefreshTask() {
-    const refreshScript = require('./refresh-urls.js').refreshAllUrls;
-    const run = () => {
-        console.log('[RefreshTask] 开始刷新播放链接...');
-        refreshScript().then(updated => {
-            console.log(`[RefreshTask] 完成，更新了 ${updated} 个链接`);
-        }).catch(e => {
-            console.error('[RefreshTask] 失败:', e.message);
-        });
-    };
-    // 启动 30 秒后首次执行，之后每 24 小时执行
-    setTimeout(run, 30000);
-    refreshTimer = setInterval(run, 24 * 60 * 60 * 1000);
-}
+// 播放链接策略：
+//   - 点播时由客户端调 /api/refresh-url，按 _linkID + _folderId + _fileId 精准取最新签名 URL；
+//   - 同时启动 24h 定时任务刷新所有 videoUrl 作为兜底，保证刷新接口偶发失败仍可播放。
 
 server.listen(PORT, () => {
-    startRefreshTask();
     console.log(`云盘影院服务器已启动: http://localhost:${PORT}`);
+    startRefreshTask();
     console.log(`TMDB API Key: ${TMDB_API_KEY ? '已配置 ✓' : '未配置 ✗ (请在 config.json 中添加 apiKey)'}`);
     console.log(`本地代理: ${LOCAL_PROXY || '未配置（TMDB将直连，国内服务器建议配置代理）'}`);
     console.log(`TMDB 镜像: ${TMDB_MIRRORS.join(', ')}`);

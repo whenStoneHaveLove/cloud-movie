@@ -1094,14 +1094,31 @@ const App = (() => {
 
     // ===== Player =====
 
+    function showToast(msg) {
+        let el = document.getElementById('appToast');
+        if (!el) {
+            el = document.createElement('div');
+            el.id = 'appToast';
+            el.style.cssText = 'position:fixed;left:50%;bottom:48px;transform:translateX(-50%);'
+                + 'background:rgba(0,0,0,.85);color:#fff;padding:12px 20px;border-radius:8px;'
+                + 'font-size:14px;z-index:9999;opacity:0;transition:opacity .25s;pointer-events:none;'
+                + 'max-width:80vw;text-align:center;';
+            document.body.appendChild(el);
+        }
+        el.textContent = msg;
+        el.style.opacity = '1';
+        clearTimeout(el._t);
+        el._t = setTimeout(() => { el.style.opacity = '0'; }, 3000);
+    }
+
     function playMovie(id) {
         const movie = movies.find(m => m.id === id);
         if (!movie) return;
 
         const enriched = enrichMovie(movie);
 
-        // 云端视频刷新过期链接
-        if (enriched.videoUrl && enriched.videoUrl.includes('mcloud.139.com') && enriched._linkID) {
+        // 云端视频（139 网盘）：点播时实时走接口获取最新签名链接（失败回退已存 videoUrl）
+        if (enriched._linkID && enriched._fileId) {
             refreshAndPlay(enriched);
             return;
         } else {
@@ -1110,12 +1127,12 @@ const App = (() => {
     }
 
     async function refreshAndPlay(enriched) {
+        // 点播时实时走接口获取最新签名链接；成功则更新并回写存储，失败回退到已存储 videoUrl
         const freshUrl = await ShareParser.refreshDownloadUrl(
-            enriched._linkID, enriched._passwd, enriched._fileId, enriched.folderPath
+            enriched._linkID, enriched._passwd, enriched._fileId, enriched._folderId
         );
         if (freshUrl) {
             enriched.videoUrl = freshUrl;
-            // 回写到 movies 数组和存储
             const movie = movies.find(m => m.id === enriched.id);
             if (movie) {
                 movie.videoUrl = freshUrl;
@@ -1126,6 +1143,10 @@ const App = (() => {
     }
 
     function doPlay(enriched) {
+        if (!enriched.videoUrl) {
+            showToast('该影片暂无可用播放地址');
+            return;
+        }
 
         document.getElementById('playerTitle').textContent = enriched.title;
 
@@ -1819,6 +1840,7 @@ const App = (() => {
                             _linkID: shareData.linkID || null,
                             _passwd: shareData.passwd || null,
                             _fileId: file.fileId || null,
+                            _folderId: file.folderId || null,
                         };
 
                         existing.push(movie);

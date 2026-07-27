@@ -1,9 +1,7 @@
 /**
- * 定时刷新所有影片的播放链接（网盘签名 URL 24h 过期）
- *
- * 用法：
- *   1. 独立执行：node refresh-urls.js
- *   2. server.js 自动调用：require('./refresh-urls.js').refreshAllUrls()
+ * 播放链接刷新（网盘签名 URL 24h 过期）
+ *   - refreshAllUrls / startRefreshTask：定时批量刷新所有影片的 videoUrl（兜底）
+ *   - refreshSingleUrl：点播时按需精准刷新单个文件链接（无需遍历整目录）
  */
 const fs = require('fs');
 const https = require('https');
@@ -116,12 +114,42 @@ async function buildFileMap(linkID, passwd, caId, depth) {
     return map;
 }
 
+/**
+ * 刷新单个文件的下载链接（供播放时按需调用）
+ * 服务端按 coID + 文件夹 caID 精准列出所在文件夹，取最新签名 URL。
+ * @returns {string|null} 新的下载链接，找不到或出错时返回 null
+ */
+async function refreshSingleUrl(linkID, passwd, fileId, folderId) {
+    if (!linkID || !fileId) return null;
+    try {
+        let fileMap;
+        if (folderId) {
+            // 精准：只列该文件所在文件夹（1 次请求），按 coID 取最新签名 URL
+            const data = await fetchAllFiles(linkID, passwd, folderId);
+            fileMap = {};
+            for (const f of (data.coLst || [])) {
+                if (f.coID) fileMap[f.coID] = f.presentURL || f.cdnDownLoadUrl || '';
+            }
+        } else {
+            // 兜底：旧数据没有 folderId 时，遍历整棵目录
+            fileMap = await buildFileMap(linkID, passwd, 'root', 0);
+        }
+        const url = fileMap[fileId];
+        return url || null;
+    } catch (e) {
+        console.error(`[Refresh] refreshSingleUrl 失败: ${e.message}`);
+        return null;
+    }
+}
+
+/**
+ * 定时批量刷新所有影片的播放链接，写入各自 videoUrl（兜底，保证刷新接口偶发失败仍可播放）
+ * @returns {number} 更新了多少个链接
+ */
 async function refreshAllUrls(moviesPath) {
     const filePath = moviesPath || path.join(__dirname, 'data', 'movies.json');
-    console.log('[Refresh] 读取 ' + filePath);
     const movies = JSON.parse(fs.readFileSync(filePath, 'utf8'));
 
-    // 按 linkID 分组
     const groups = {};
     for (const m of movies) {
         if (!m._linkID || !m._fileId) continue;
@@ -131,36 +159,17 @@ async function refreshAllUrls(moviesPath) {
         groups[key].movies.push(m);
     }
 
-    const groupEntries = Object.entries(groups);
-    if (groupEntries.length === 0) {
-        console.log('[Refresh] 没有需要刷新的影片');
-        return 0;
-    }
-    console.log(`[Refresh] ${groupEntries.length} 个分享链接，共 ${movies.filter(m => m._linkID && m.videoUrl && m.videoUrl.includes('mcloud.139.com')).length} 部影片`);
-
     let updated = 0;
-    let totalMatched = 0;
-    let totalNotFound = 0;
-    for (const [key, g] of groupEntries) {
-        console.log(`[Refresh] 处理 ${g.movies.length} 部影片, linkID=${g.linkID}`);
+    for (const [key, g] of Object.entries(groups)) {
         try {
             const fileMap = await buildFileMap(g.linkID, g.passwd, 'root', 0);
-            console.log(`  共 ${Object.keys(fileMap).length} 个文件映射`);
             for (const m of g.movies) {
                 const freshUrl = fileMap[m._fileId];
-                if (freshUrl) {
-                    totalMatched++;
-                    if (freshUrl !== m.videoUrl) {
-                        console.log(`  更新: ${m.title}`);
-                        m.videoUrl = freshUrl;
-                        updated++;
-                    }
-                } else {
-                    totalNotFound++;
-                    if (totalNotFound <= 3) console.log(`  未找到: ${m.title} fileId=${m._fileId}`);
+                if (freshUrl && freshUrl !== m.videoUrl) {
+                    m.videoUrl = freshUrl;
+                    updated++;
                 }
             }
-            console.log(`  匹配: ${totalMatched} / 未找到: ${totalNotFound} / 更新了: ${updated}`);
         } catch (e) {
             console.error(`[Refresh] 失败: ${key}`, e.message);
         }
@@ -171,9 +180,17 @@ async function refreshAllUrls(moviesPath) {
     return updated;
 }
 
-// 直接运行时执行
+function startRefreshTask() {
+    const TWENTY_FOUR_HOURS = 24 * 60 * 60 * 1000;
+    setInterval(() => {
+        refreshAllUrls().catch(e => console.error('[Refresh] 定时刷新失败:', e.message));
+    }, TWENTY_FOUR_HOURS);
+    console.log('[Refresh] 已启动 24h 定时刷新任务');
+}
+
+// 直接运行时执行（node refresh-urls.js）
 if (require.main === module) {
     refreshAllUrls().catch(e => { console.error(e); process.exit(1); });
 }
 
-module.exports = { refreshAllUrls };
+module.exports = { refreshAllUrls, refreshSingleUrl, startRefreshTask };
