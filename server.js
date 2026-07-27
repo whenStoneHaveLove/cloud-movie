@@ -520,6 +520,25 @@ async function handleAdmin(req, res) {
             }
         }
 
+        // Clear all backups
+        if (adminPath === '/backups' && method === 'DELETE') {
+            try {
+                const backupDir = path.join(DATA_DIR, 'backups');
+                let deleted = 0;
+                if (fs.existsSync(backupDir)) {
+                    for (const f of fs.readdirSync(backupDir)) {
+                        fs.unlinkSync(path.join(backupDir, f));
+                        deleted++;
+                    }
+                }
+                console.log(`[Admin] 已清空所有备份 (${deleted} 个文件)`);
+                return sendJSON(res, 200, { ok: true, deleted });
+            } catch (e) {
+                console.error('Clear backups error:', e.message);
+                return sendJSON(res, 500, { error: '清空备份失败: ' + e.message });
+            }
+        }
+
         // Restore from backup (body: { timestamp: "2026-06-17T00-00-00-000Z" })
         if (adminPath === '/restore' && method === 'POST') {
             try {

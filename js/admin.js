@@ -230,6 +230,9 @@ const Admin = (() => {
                         <button class="btn btn-warning" id="btnAdminRestore" onclick="Admin.doRestoreLatest()" disabled>
                             <i class="fas fa-rotate-left"></i> 恢复到最新备份
                         </button>
+                        <button class="btn btn-danger" id="btnAdminClearBackups" onclick="Admin.clearBackups()">
+                            <i class="fas fa-trash"></i> 清空所有备份
+                        </button>
                     </div>
                     <div id="adminBackupList" class="admin-backup-list">
                         <div class="admin-loading">暂无备份</div>
@@ -525,6 +528,25 @@ const Admin = (() => {
         }
     }
 
+    async function clearBackups() {
+        if (!confirm('⚠️ 确定要清空所有备份吗？\n此操作不可撤销，所有历史备份将被永久删除！')) return;
+        try {
+            const res = await fetch('/api/admin/backups', {
+                method: 'DELETE',
+                headers: { 'Authorization': 'Bearer ' + getToken() }
+            });
+            const data = await res.json();
+            if (data.ok) {
+                alert(`✅ 已清空所有备份（${data.deleted} 个文件）`);
+                loadBackups();
+            } else {
+                alert('❌ 清空失败: ' + (data.error || '未知错误'));
+            }
+        } catch (e) {
+            alert('❌ 清空失败: ' + e.message);
+        }
+    }
+
     // Init on DOM ready
     document.addEventListener('DOMContentLoaded', init);
 
@@ -542,5 +564,6 @@ const Admin = (() => {
         doBackup,
         doRestore,
         doRestoreLatest,
+        clearBackups,
     };
 })();
