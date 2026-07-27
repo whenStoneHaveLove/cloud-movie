@@ -1,3 +1,18 @@
+// 统一给日志加时间戳（本地时间），方便排查
+const _logTs = (() => {
+    const p = (n) => String(n).padStart(2, '0');
+    return () => {
+        const d = new Date();
+        return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`;
+    };
+})();
+const _origLog = console.log.bind(console);
+const _origErr = console.error.bind(console);
+const _origWarn = console.warn.bind(console);
+console.log = (...a) => _origLog(`[${_logTs()}]`, ...a);
+console.error = (...a) => _origErr(`[${_logTs()}]`, ...a);
+console.warn = (...a) => _origWarn(`[${_logTs()}]`, ...a);
+
 const http = require('http');
 const https = require('https');
 const tls = require('tls');
@@ -501,6 +516,25 @@ async function handleAdmin(req, res) {
                 return sendJSON(res, 200, { backups });
             } catch (e) {
                 return sendJSON(res, 500, { error: '读取备份列表失败: ' + e.message });
+            }
+        }
+
+        // Clear all backups
+        if (adminPath === '/backups' && method === 'DELETE') {
+            try {
+                const backupDir = path.join(DATA_DIR, 'backups');
+                let deleted = 0;
+                if (fs.existsSync(backupDir)) {
+                    for (const f of fs.readdirSync(backupDir)) {
+                        fs.unlinkSync(path.join(backupDir, f));
+                        deleted++;
+                    }
+                }
+                console.log(`[Admin] 已清空所有备份 (${deleted} 个文件)`);
+                return sendJSON(res, 200, { ok: true, deleted });
+            } catch (e) {
+                console.error('Clear backups error:', e.message);
+                return sendJSON(res, 500, { error: '清空备份失败: ' + e.message });
             }
         }
 
